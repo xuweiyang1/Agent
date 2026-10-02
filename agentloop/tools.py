@@ -8,10 +8,20 @@ contract shown to the model, and it is the part most worth reading.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from .llm import ToolCall
+
+_WORD = re.compile(r"[a-z0-9]+")
+
+# Words this short carry no retrieval signal and only create false hits.
+_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "do", "does", "for",
+    "from", "how", "in", "is", "it", "of", "on", "or", "that", "the", "to",
+    "what", "when", "where", "which", "why", "with",
+}
 
 
 class ToolError(RuntimeError):
@@ -109,6 +119,67 @@ def _matches_type(value: Any, expected: str) -> bool:
     return True
 
 
+def tokenize(text: str) -> list[str]:
+    """Lowercase word tokens with stopwords and single characters removed."""
+    return [w for w in _WORD.findall(text.lower()) if len(w) > 1 and w not in _STOPWORDS]
+
+
+def _stem(word: str) -> str:
+    """Strip the few suffixes that actually show up in this corpus.
+
+    Not a real stemmer. It exists because substring matching failed on a
+    real query: the corpus says "retries" and the model asked for "retry".
+    Teaching the index those two are the same word is the whole fix, and a
+    full Porter stemmer would be more machinery than the problem needs.
+    """
+    for suffix in ("ies", "es", "s", "ed", "ing", "y"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word
+
+
+def rank_entries(query: str, corpus: dict[str, str]) -> list[tuple[str, int]]:
+    """Score each entry by how many distinct query terms it contains.
+
+    Matching is on stemmed whole tokens rather than substrings, so "retry"
+    and "retries" collide while "err" no longer matches "error" by accident.
+    Title hits score double: a term in the key is a stronger signal than the
+    same term buried in the body.
+    """
+    terms = {_stem(t) for t in tokenize(query)}
+    if not terms:
+        return []
+
+    scored: list[tuple[str, int]] = []
+    for key, body in corpus.items():
+        key_terms = {_stem(t) for t in tokenize(key)}
+        body_terms = {_stem(t) for t in tokenize(body)}
+        score = 2 * len(terms & key_terms) + len(terms & body_terms)
+        if score:
+            scored.append((key, score))
+
+    scored.sort(key=lambda pair: (-pair[1], pair[0]))
+    return scored
+
+
+def _snippet(body: str, query: str, width: int = 140) -> str:
+    """Return the part of the body most likely to answer the query.
+
+    Sending a snippet instead of only an id is what removes the second tool
+    call for most questions: the model can often answer from the search
+    result and never needs `read`.
+    """
+    if len(body) <= width:
+        return body
+    terms = {_stem(t) for t in tokenize(query)}
+    lowered = tokenize(body)
+    for index, word in enumerate(lowered):
+        if _stem(word) in terms:
+            start = max(0, body.lower().find(word) - width // 3)
+            return body[start : start + width].strip()
+    return body[:width].strip()
+
+
 def build_default_registry(corpus: dict[str, str] | None = None) -> ToolRegistry:
     """A registry with two offline tools, enough to exercise the loop."""
     data = corpus or {
@@ -117,14 +188,20 @@ def build_default_registry(corpus: dict[str, str] | None = None) -> ToolRegistry
         "context-window": "The context window is a hard budget of tokens "
         "shared by system prompt, history, and tool output.",
         "backoff": "Exponential backoff retries a transient failure with "
-        "growing delays, and is a safety requirement once writes are involved.",
+        "growing delays, and is a safety requirement once writes are involved. "
+        "A retryable error is one a later attempt can succeed on, such as a "
+        "rate limit or a timeout; a non-retryable error will fail the same "
+        "way every time.",
+        "tool-registry": "The tool registry maps a tool name to its schema and "
+        "its implementation, and validates arguments before calling it.",
     }
 
     registry = ToolRegistry()
 
     @registry.tool(
         "search",
-        "Search the local knowledge base for a keyword and return matching ids.",
+        "Search the local knowledge base. Returns matching entry ids with a "
+        "short snippet of each, ranked by relevance.",
         {
             "type": "object",
             "properties": {"query": {"type": "string"}},
@@ -132,9 +209,14 @@ def build_default_registry(corpus: dict[str, str] | None = None) -> ToolRegistry
         },
     )
     def search(query: str) -> dict[str, Any]:
-        needle = query.lower()
-        hits = [key for key, body in data.items() if needle in key.lower() or needle in body.lower()]
-        return {"query": query, "hits": hits}
+        ranked = rank_entries(query, data)
+        return {
+            "query": query,
+            "hits": [
+                {"id": key, "score": score, "snippet": _snippet(data[key], query)}
+                for key, score in ranked
+            ],
+        }
 
     @registry.tool(
         "read",
