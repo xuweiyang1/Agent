@@ -152,6 +152,38 @@ because of a measured failure: with the permissive prompt, the model answered
 an out-of-corpus question from its own memory in zero tool calls.
 
 Change the variant with `--prompt retrieval`, then compare reports.
+## Results
+
+Two prompt variants over the same 13 tasks, same corpus, same model:
+
+| | `default` | `retrieval` |
+| --- | --- | --- |
+| pass rate | 12/13 (92.3%) | **13/13 (100%)** |
+| `negative` | 2/3 | **3/3** |
+| `lookup` | 4/4 | 4/4 |
+| billed tokens | 35,636 | 36,524 |
+| amplification | 2.92x | **2.72x** |
+| tool calls | 45 | **41** |
+
+The single difference is a retrieval-first prompt. The `default` prompt lost
+one task: asked for the capital of Peru, the model answered from memory in
+**zero tool calls**. The `retrieval` prompt fixed exactly that task and cost
+2.5% more tokens while making 9% fewer tool calls.
+
+Getting a clean number required fixing the grader first. It rejected the
+correct answer to `lookup-03` because the model wrote "as \*data\*, never as
+instructions" and the check searched for the literal string "as data". The fix
+is `normalize()` in `agentloop/eval.py`, which folds Markdown emphasis and
+typographic punctuation before matching. Every saved report was then re-scored
+offline with `scripts/regrade.py`, so the corrected verdicts cost nothing:
+
+```
+report-v1.json  12/13 passed
+report-v2.json  13/13 passed   lookup-03 FIXED
+```
+
+The lesson worth keeping: when a benchmark disagrees with a visibly correct
+answer, check the grader before changing the model.
 ## Getting the code onto an offline server
 
 If the machine that runs this code cannot reach GitHub, then GitHub cannot

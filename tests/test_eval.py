@@ -107,5 +107,46 @@ class PromptTests(unittest.TestCase):
         self.assertFalse(grade(task, unlabelled)[0])
 
 
+class NormalizeTests(unittest.TestCase):
+    """Regression tests for a grader bug that produced a false failure.
+
+    The model answered "as *data*, never as instructions", which is correct,
+    and the grader rejected it because it searched for the literal "as data".
+    """
+
+    def test_markdown_emphasis_does_not_hide_a_match(self):
+        from agentloop.eval import normalize
+
+        self.assertIn("as data, never as instructions", normalize("**as *data*, never as instructions**"))
+
+    def test_emphasis_before_punctuation_leaves_no_stray_space(self):
+        from agentloop.eval import normalize
+
+        self.assertNotIn(" ,", normalize("as *data*, never"))
+        self.assertIn("data, never", normalize("as *data*, never"))
+
+    def test_typographic_punctuation_folds_to_ascii(self):
+        from agentloop.eval import normalize
+
+        self.assertIn("a - b", normalize("a \u2014 b"))
+        self.assertIn("don't", normalize("don\u2019t"))
+
+    def test_normalisation_does_not_erase_words(self):
+        from agentloop.eval import normalize
+
+        self.assertIn("retryable", normalize("`retryable` error"))
+        self.assertIn("knowledge base", normalize("the **knowledge base** says"))
+
+    def test_a_real_answer_that_was_falsely_rejected_now_passes(self):
+        """The exact text from the run that exposed the bug."""
+        answer = (
+            "**From the knowledge base** (entry: `prompt-injection`):\n\n"
+            "How tool output should be treated: as *data*, never as instructions."
+        )
+        tasks = {t.id: t for t in load_tasks()}
+        passed, failures = grade(tasks["lookup-03"], answer)
+        self.assertTrue(passed, f"still rejected: {failures}")
+
+
 if __name__ == "__main__":
     unittest.main()

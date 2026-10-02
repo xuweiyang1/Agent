@@ -1,0 +1,170 @@
+{
+  "model": "deepseek-chat",
+  "prompt": "retrieval",
+  "mode": "live",
+  "results": [
+    {
+      "id": "lookup-01",
+      "category": "lookup",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 3,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1317,
+      "answer": "According to the knowledge base (entry `tool-registry`):\n\n**The tool registry validates the arguments before calling the tool.** It maps a tool name to two things \u2014 its schema and its implementation \u2014 and the schema is what the model sees. Because of that, a missing required field shows up as a *tool error message in the transcript* rather than as an exception.\n\nSo in short: name \u2192 schema + implementation, with argument validation happening before the implementation is invoked.\n\nIf you want more detail than that \u2014 for example, what other checks (permissions, rate limits, sandboxing) might happen at that stage \u2014 the knowledge base doesn't cover it. Anything I said beyond the above would be my own general knowledge, not from the knowledge base, and I'd flag it as unverified."
+    },
+    {
+      "id": "lookup-02",
+      "category": "lookup",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 2,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 633,
+      "answer": "According to the knowledge base, English averages **about four characters per token**. It notes that this is only a rough estimate \u2014 code and non-Latin scripts are less efficient, so a character count shouldn't be treated as an exact budget.\n\nThat's the extent of what the knowledge base covers on this; it doesn't give a words-per-token figure. As supplement from my own knowledge (not from the knowledge base, and unverified here): four characters works out to roughly \u00be of a word per token, i.e. about 1.3 tokens per English word, or ~750 words per 1,000 tokens."
+    },
+    {
+      "id": "lookup-03",
+      "category": "lookup",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 3,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1326,
+      "answer": "**From the knowledge base** (entry: `prompt-injection`):\n\n**What prompt injection is:** an attack where text retrieved from a tool or a document contains instructions that the model then follows.\n\n**How tool output should be treated:** as *data*, never as instructions. The knowledge base also pairs this with a second defence: keep a human in the loop for any action with side effects.\n\nThat's the full extent of what the knowledge base says on this topic \u2014 it doesn't go into further specifics such as detection techniques, sanitisation methods, or how to structure system prompts to reinforce the data/instruction boundary. If you want those, I can offer a general answer, but I'd have to label it as coming from my own knowledge rather than from the knowledge base."
+    },
+    {
+      "id": "lookup-04",
+      "category": "lookup",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 3,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1083,
+      "answer": "The knowledge base has one directly relevant entry, but it's short and doesn't actually answer your question about *grading grounds*. Here's what it does say, and where things stand:\n\n**From the knowledge base (entry \"evaluation\"):**\n- An evaluation set is a **fixed list of tasks with known correct answers**, used to compare two versions of a system.\n- The rationale given is that without one, a prompt change is a guess, \"because a single convincing demo says nothing about the cases that regressed.\"\n\n**However**, the knowledge base does **not** cover the question you actually asked \u2014 on what *grounds* a task set should be graded (e.g., correctness criteria, rubric dimensions, pass/fail thresholds, partial credit, etc.). That specific guidance is absent. Related entries exist on the agent loop, latency budget, and observability, but none of them address grading criteria either.\n\n**From my own knowledge, not the knowledge base (unverified against any source here):** common practice in agent evaluation is to grade task sets along several axes \u2014 outcome correctness (did the task's success condition hold, often with a programmatic checker or test), trajectory/process quality (were the tool calls appropriate and safe), efficiency (steps, tokens, latency), and robustness across repeated runs. Rubrics often mix automatic checkers with human or model-based judges, and tasks are typically labelled with a verifiable ground truth so regressions are detectable. Treat this paragraph as general background from me, not as a knowledge-base fact."
+    },
+    {
+      "id": "multi-01",
+      "category": "multi_hop",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 5,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1247,
+      "answer": "**From the knowledge base:**\n\nAn agent loop alternates model calls with tool calls \u2014 each iteration sends the *entire* transcript to the model, then appends the new tool results and repeats. Meanwhile, the context window is a hard token budget shared by the system prompt, conversation history, and every tool result. It doesn't grow, so anything appended either pushes something else out or causes the request to be rejected.\n\nThat combination is why long runs eventually need compaction: as the loop keeps appending turns and tool results, the transcript eventually stops fitting. Compaction summarizes or drops older turns to keep the run fitting in the context window.\n\nTwo caveats the knowledge base notes:\n\n- Compaction is **deliberately lossy**, so what it cuts matters.\n- The cut **must not separate a tool result from the request that produced it** \u2014 most providers reject a transcript where a tool message has no matching call.\n\n(A related but separate point, if relevant: the loop also needs a *turn ceiling*, because a model can request tools indefinitely \u2014 that's a guard on loop termination, not on context size.)\n\nIf you want, I can also tell you what the knowledge base says about latency or observability in the loop, but neither is what drives the need for compaction."
+    },
+    {
+      "id": "multi-02",
+      "category": "multi_hop",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 4,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1290,
+      "answer": "## Answer (from the knowledge base)\n\n**Cut the number of round trips first** \u2014 i.e. reduce the number of tool calls / model iterations, not the size of the payload.\n\nWhy:\n\n- Latency in an agent loop is dominated by the number of round trips, not the size of the payload. Going from ten tool calls to five roughly halves the wall clock time.\n- Trimming tokens from a request mostly reduces **cost**, not wall clock time \u2014 so context trimming is the wrong first lever if your goal is speed.\n- The loop works by alternating model calls with tool calls: each iteration sends the transcript, executes the requested tools, appends results, and repeats. So each additional iteration adds another round trip, and the loop structure is what multiplies your wall clock time.\n\nPractical implication: look for redundant/parallelizable tool calls and unnecessary iterations before you start shaving prompt size.\n\n## Scope note\n\nThe knowledge base has entries on the agent loop, latency, observability, compaction, backoff/retries, and function calling, but it doesn't give a ranked set of other optimizations beyond the round-trip point above. Anything further I'd have to offer as **my own knowledge, unverified against the knowledge base** \u2014 e.g. parallelizing independent tool calls, caching, smaller/faster models per step, streaming. If you want, I can search for more specific entries (e.g. on retries or compaction) that might bear on latency too."
+    },
+    {
+      "id": "multi-03",
+      "category": "multi_hop",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 5,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1641,
+      "answer": "I searched the knowledge base. Here's what it covers and where it's silent.\n\n**What the knowledge base says**\n\nThe entry on **exponential backoff** is the only one relevant to your question, and it's fairly narrow. Its content:\n\n- Exponential backoff retries a *transient* failure with growing delays, and is described as \"a safety requirement once writes are involved.\"\n- It draws a distinction between two classes of error:\n  - **Retryable error** \u2014 one that a later attempt can succeed on, e.g. a rate limit or a timeout.\n  - **Non-retryable error** \u2014 e.g. a malformed request, which \"will fail the same way every time, so retrying it only wastes the budget.\"\n- A second, partial hit (also from the backoff entry) adds: a request that will fail the same way every time \"only wastes the budget\" when retried.\n\nThe **observability** entry (full transcript, token count, latency, tool outcomes recorded per run; un-replayable failures can't be fixed) and the **tool-registry** entry (a missing required field becomes a tool error message in the transcript rather than an exception) came up in search but don't address retry safety directly.\n\n**Important correction to the premise of your question**\n\nI want to flag this clearly, because the question as phrased assumes something the knowledge base does not support:\n\n- The knowledge base does **not** say a retry is unsafe for *every* kind of error. It says the opposite kind of thing \u2014 it identifies a category of *retryable* errors (rate limits, timeouts) that retries are meant for.\n- Its stated consequence of retrying a non-retryable error is **wasted budget**, not unsafety.\n- The \"unsafe\" framing appears only in a different context: backoff is called a *safety requirement* once writes are involved, i.e. retrying is the thing that needs safety machinery (backoff), not the thing that's inherently unsafe.\n\nSo the KB does not support \"retry is unsafe for every kind of error,\" and it does not describe a failure mode from \"retrying everything\" beyond consuming budget.\n\n**What the knowledge base does not cover**\n\nIt says nothing about idempotency, at-most-once vs. at-least-once delivery, duplicate side effects, non-idempotent writes being re-executed, retry storms against an already-overloaded service, or poisoning a queue. If you were expecting those\u2014they're the usual reasons retrying everything is considered dangerous\u2014**the knowledge base is silent on all of them.**\n\n**From my own knowledge, not the knowledge base** (unverified against any KB entry):\n\nThe standard argument isn't that *retry is unsafe for every error*, but that blanket retrying is unsafe because it applies a remedy for transient faults to faults that aren't transient. Key points, offered as general background:\n\n1. **Non-idempotent side effects.** If the first attempt actually succeeded but the response was lost (timeout after the write landed), a blind retry duplicates the effect \u2014 double charge, double send, duplicated row. This is why idempotency keys exist.\n2. **Retrying permanent errors wastes resources and hides bugs.** A malformed request or auth failure will fail identically every time; retries burn budget and delay surfacing the real defect.\n3. **Retry storms / metastable failure.** Retries amplify load exactly when the system is already struggling, turning a blip into an outage.\n4. **The right discipline** is: classify errors (retryable vs. not), retry only transient ones, use exponential backoff with jitter, cap attempts, and make write paths idempotent.\n\nTreat points 1\u20134 as my own general knowledge, not as content from the knowledge base \u2014 the KB entry only supports the retryable/non-retryable distinction and the \"wastes the budget\" consequence."
+    },
+    {
+      "id": "para-01",
+      "category": "paraphrase",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 3,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 882,
+      "answer": "The fix is **embedding retrieval** (semantic search).\n\nFrom the knowledge base entry `embedding-retrieval`:\n\n- **The problem you're describing is exactly what it names:** keyword search matches literal terms, so it fails when a query and a document use different words for the same idea. That's your \"means the same thing but uses different words\" case.\n- **The fix:** embedding retrieval compares vectors instead of literal terms, so paraphrases match.\n- **The trade-offs it lists:** you pay a model call, and you lose the exact-match guarantee that keyword search provides.\n\nWorth noting given rule 4: the entry mentions embeddings specifically. It does **not** cover related techniques you might also hear about, such as synonym expansion, query rewriting, hybrid keyword+vector search, or BM25 \u2014 so anything I said about those would be outside the knowledge base and unverified. If you want, I can search for those terms to confirm whether the KB covers them."
+    },
+    {
+      "id": "para-02",
+      "category": "paraphrase",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 4,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1222,
+      "answer": "Based on the knowledge base, here's the answer:\n\n**The knowledge base's answer:** You work out why a run went wrong by relying on **observability** \u2014 recording, for every run, the:\n\n- full transcript\n- token count\n- latency\n- tool outcomes\n\nThe key principle given is that **the trace is what makes a failure reproducible, and a failure that cannot be replayed cannot be fixed.** So the answer is essentially: make sure you're capturing traces of your runs, then go back to the trace of the failed run and replay it.\n\nOne supporting detail from the knowledge base that's relevant to diagnosing a bad run: an agent loop alternates model calls with tool calls until the model stops requesting tools, and each iteration sends the transcript to the model, executes the tools asked for, appends the results, and repeats. The loop needs a turn ceiling because a model can request tools indefinitely \u2014 so a run that \"goes wrong\" may involve this loop structure, which the trace would help you inspect.\n\n**Not covered by the knowledge base:** The entries I found don't go into specifics of, say, log formats, tooling for viewing traces, or common failure modes and how to fix each. If you want those details, I can only offer them from my own general knowledge and they'd be **unverified** against this knowledge base \u2014 just say the word."
+    },
+    {
+      "id": "para-03",
+      "category": "paraphrase",
+      "passed": true,
+      "failures": [],
+      "turns": 3,
+      "tool_calls": 4,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 1522,
+      "answer": "Based on the knowledge base:\n\n**The transcript is rejected by most providers.** The `compaction` entry states that compaction is deliberately lossy, so the cut must not separate a tool result from the request that produced it \u2014 \"most providers reject a transcript where a tool message has no matching call.\"\n\nSo an orphaned tool result (a tool message with no matching tool call) isn't just an inconsistency the model might ignore; it typically makes the whole transcript invalid as a request payload. The practical implication recorded in that entry is a constraint on compaction: when dropping or summarizing older turns, you have to cut on a boundary that keeps each tool result together with the call that produced it.\n\nNote that the knowledge base doesn't say anything about what a *particular* provider does beyond the general \"most providers reject\" statement, nor about recovery strategies for an already-orphaned result. Anything beyond the above would be my own knowledge, not the knowledge base's."
+    },
+    {
+      "id": "neg-01",
+      "category": "negative",
+      "passed": true,
+      "failures": [],
+      "turns": 2,
+      "tool_calls": 1,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 237,
+      "answer": "The knowledge base doesn't cover the capital of Peru \u2014 my search returned no matching entries.\n\nFrom my own general knowledge (not from the knowledge base, and unverified here): the capital of Peru is Lima."
+    },
+    {
+      "id": "neg-02",
+      "category": "negative",
+      "passed": true,
+      "failures": [],
+      "turns": 2,
+      "tool_calls": 2,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 422,
+      "answer": "The knowledge base doesn't cover this \u2014 both searches came back with no matching entries, so I can't give you a verified answer about Shanghai's weather on 3 March 2024.\n\nFrom my own knowledge (not the knowledge base, and unverified): I don't have reliable recall of specific daily weather conditions for a particular date and city, so I can't offer even a general figure with confidence. Daily weather records for arbitrary past dates are the kind of detail I'd need a database for, and my training data doesn't preserve that level of specificity reliably. Guessing a temperature or condition here would risk being simply wrong.\n\nIf you need this, a historical weather service (e.g., a meteorological archive or a site offering past-date weather lookups) would give you a trustworthy answer."
+    },
+    {
+      "id": "neg-03",
+      "category": "negative",
+      "passed": true,
+      "failures": [],
+      "turns": 2,
+      "tool_calls": 2,
+      "failed_calls": 0,
+      "retries": 0,
+      "tokens": 583,
+      "answer": "I searched the knowledge base for \"sourdough bread baking\" and \"bread recipe\" \u2014 no entries matched, so the knowledge base doesn't cover this topic.\n\nWhat follows is from my own general knowledge, **not** from the knowledge base, and should be treated as unverified:\n\nA basic sourdough process looks roughly like this:\n\n1. **Maintain a starter** \u2014 a flour-and-water culture you feed regularly until it's active and doubles predictably (typically 4\u20138 hours after feeding at room temperature).\n2. **Mix** \u2014 combine starter, flour, water, and salt. A common starting ratio is around 20% starter and 2% salt by flour weight, with 70\u201375% hydration.\n3. **Bulk ferment** \u2014 let it rest at room temperature with periodic stretch-and-folds, until the dough is puffy and has risen noticeably.\n4. **Shape** \u2014 preshape, rest, then shape into a boule or batard and place in a proofing basket.\n5. **Cold retard** \u2014 refrigerate overnight for flavor and easier scoring.\n6. **Bake** \u2014 in a preheated Dutch oven at roughly 450\u2013500\u00b0F, covered for the first ~20 minutes, then uncovered until deep brown. Internal temperature around 200\u2013210\u00b0F is a common doneness target.\n7. **Cool completely** before slicing.\n\nTimings vary a lot with room temperature and starter strength. If you'd like, I can try searching the knowledge base with different terms in case the entry is filed under something unexpected \u2014 or, if this is a topic your knowledge base is supposed to include, it may be missing an entry."
+    }
+  ],
+  "usage": {
+    "calls": 36,
+    "prompt_tokens": 31444,
+    "completion_tokens": 5080,
+    "total_tokens": 36524
+  },
+  "regraded": true
+}

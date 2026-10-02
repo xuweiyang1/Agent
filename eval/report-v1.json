@@ -166,5 +166,6 @@
     "prompt_tokens": 30266,
     "completion_tokens": 5370,
     "total_tokens": 35636
-  }
+  },
+  "regraded": true
 }
