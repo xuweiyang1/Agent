@@ -18,6 +18,7 @@ non-obvious decision is explained in a docstring at the point it matters.
 | `agentloop/tools.py` | Tool registry, argument validation, error containment, two offline tools |
 | `agentloop/context.py` | Token estimation and compaction that never orphans a tool result |
 | `agentloop/runtime.py` | The loop itself: turns, dispatch, backoff, truncation, observer hooks |
+| `agentloop/providers/` | OpenAI-compatible adapter (DeepSeek, Moonshot, Qwen), plus record and replay transports |
 
 ## Run it
 
@@ -28,6 +29,9 @@ py -m unittest discover -s tests -t . -v
 
 `demo.py` needs no API key. It runs a scripted model and prints a trace of
 tool calls, turns, retry count, compaction, and estimated tokens.
+
+With a key set, the same loop runs against a real endpoint instead of the
+scripted one:
 
 ## What is worth looking at
 
@@ -55,14 +59,54 @@ should be built from, and `max_tokens` makes the cost of a long run visible.
 
 These are the natural next steps, in the order they add value:
 
-1. A real provider adapter behind the `Model` protocol, plus a recorded
-   fixture so tests stay offline.
+1. ~~A real provider adapter~~ and offline replay: done, see `agentloop/providers/`.
 2. An evaluation set with a pass rate, so prompt and compaction changes can
    be compared instead of guessed at.
 3. Persistent trace logs for after-the-fact replay.
 4. Sub-agent spawning with an explicit budget.
 
 
+## Talking to a real model
+
+The loop only depends on the `Model` protocol, so a provider is an adapter
+and nothing in `runtime.py` changes. One adapter covers DeepSeek, Moonshot,
+Qwen, and most self-hosted gateways, because they all speak the same
+`/chat/completions` shape.
+
+```powershell
+$env:DEEPSEEK_API_KEY = "sk-..."
+py scripts\smoke_live.py
+```
+
+`smoke_live.py` runs three questions and prints what was actually measured:
+turns, retries, tool call success, tokens, and latency. Those numbers, not
+impressions, are what belongs on a resume line.
+
+Point it at another endpoint without touching code:
+
+```powershell
+py scripts\smoke_live.py --base-url https://api.moonshot.cn/v1 --model kimi-k2
+```
+
+### Record and replay
+
+A benchmark is worthless if the model behind the endpoint changes underneath
+it. `--record` saves every request and response, and `ReplayTransport` serves
+those back with no network access, which is why the test suite runs offline:
+
+```powershell
+py scripts\smoke_live.py --record tests\fixtures\my_run.json
+```
+
+Replay matches by position rather than by request hash. A hash would quietly
+serve a stale response whenever two requests happen to look alike, which is
+the one failure mode a benchmark must not have.
+
+### Keys
+
+Never put a key in a file git can see. Use an environment variable, or a
+`.env` file, which `.gitignore` already covers. The adapter reads the key at
+call time, and a test fails if the string `Bearer` ever appears in a fixture.
 ## Getting the code onto an offline server
 
 If the machine that runs this code cannot reach GitHub, then GitHub cannot

@@ -1,0 +1,67 @@
+[
+  {
+    "request": {
+      "model": "deepseek-chat",
+      "messages": [
+        {"role": "system", "content": "You are a helpful assistant. Use tools when they help."},
+        {"role": "user", "content": "How does the context window relate to an agent loop?"}
+      ],
+      "tools": [
+        {"type": "function", "function": {"name": "search", "description": "Search the local knowledge base for a keyword and return matching ids.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+        {"type": "function", "function": {"name": "read", "description": "Read the full text of one knowledge base entry by id.", "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}}
+      ],
+      "tool_choice": "auto"
+    },
+    "response": {
+      "id": "chatcmpl-fixture-1",
+      "object": "chat.completion",
+      "model": "deepseek-chat",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_0",
+                "type": "function",
+                "function": {"name": "search", "arguments": "{\"query\": \"context\"}"}
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {"prompt_tokens": 142, "completion_tokens": 21, "total_tokens": 163}
+    }
+  },
+  {
+    "request": {
+      "model": "deepseek-chat",
+      "messages": [
+        {"role": "system", "content": "You are a helpful assistant. Use tools when they help."},
+        {"role": "user", "content": "How does the context window relate to an agent loop?"},
+        {"role": "assistant", "content": null, "tool_calls": [{"id": "call_0", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"context\"}"}}]},
+        {"role": "tool", "content": "{\"hits\": [\"context-window\"], \"query\": \"context\"}", "tool_call_id": "call_0"}
+      ],
+      "tool_choice": "auto"
+    },
+    "response": {
+      "id": "chatcmpl-fixture-2",
+      "object": "chat.completion",
+      "model": "deepseek-chat",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "The context window is a fixed token budget shared by the system prompt, the conversation history, and every tool result. An agent loop keeps appending tool output, so without compaction the transcript eventually exceeds that budget and the request fails. Compacting older turns is what keeps the loop able to run for many turns."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {"prompt_tokens": 268, "completion_tokens": 74, "total_tokens": 342}
+    }
+  }
+]
