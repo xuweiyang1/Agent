@@ -107,6 +107,51 @@ the one failure mode a benchmark must not have.
 Never put a key in a file git can see. Use an environment variable, or a
 `.env` file, which `.gitignore` already covers. The adapter reads the key at
 call time, and a test fails if the string `Bearer` ever appears in a fixture.
+## Evaluation
+
+`eval/tasks.jsonl` holds 13 tasks in four categories, chosen to separate the
+failure modes rather than to look impressive:
+
+| Category | What it isolates |
+| --- | --- |
+| `lookup` | one entry, one search should find it |
+| `multi_hop` | two entries must be combined |
+| `paraphrase` | a query worded unlike the corpus, testing retrieval rather than phrasing |
+| `negative` | the corpus has no answer, so the honest reply is to say so |
+
+Grading is deterministic string checking, not a second model as a judge. A
+judge would drift, and a benchmark whose score moves when the repository did
+not is worthless. `tests/test_eval.py` grades known hallucinations against the
+negative tasks and requires every one of them to fail: a benchmark that always
+passes is worse than no benchmark.
+
+```powershell
+# one live pass that also saves the exchanges for later replay
+py scripts\eval.py --record eval\baseline.json --report eval\report-v1.json
+
+# re-grade offline, no key and no cost, as often as you like
+py scripts\eval.py --report eval\report-v2.json
+
+# what changed between two runs
+py scripts\eval.py --compare eval\report-v1.json eval\report-v2.json
+```
+
+### Two token numbers, both real
+
+The summary reports *billed tokens* and *final transcript length* separately,
+because they differ by the amplification factor: every turn resends the entire
+history, so a four-turn answer bills roughly four times its final size. On the
+first baseline run that factor was `2.92x`, which is the number that matters
+when predicting cost.
+
+### Prompt variants
+
+`agentloop/prompts.py` holds a permissive prompt and a retrieval-first one, so
+a prompt change becomes a measurable result. The retrieval-first variant exists
+because of a measured failure: with the permissive prompt, the model answered
+an out-of-corpus question from its own memory in zero tool calls.
+
+Change the variant with `--prompt retrieval`, then compare reports.
 ## Getting the code onto an offline server
 
 If the machine that runs this code cannot reach GitHub, then GitHub cannot

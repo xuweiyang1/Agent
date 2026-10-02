@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agentloop import Agent, build_default_registry
 from agentloop.llm import LLMError
+from agentloop.prompts import get as get_prompt
 from agentloop.eval import TaskResult, grade, load_tasks
 from agentloop.providers import OpenAICompatibleModel, RecordTransport, ReplayTransport, http_transport
 
@@ -50,7 +51,12 @@ def build_agent(args) -> tuple[Agent, OpenAICompatibleModel]:
             model=args.model, api_key="replay", transport=transport
         )
 
-    agent = Agent(model, build_default_registry(), max_turns=args.max_turns)
+    agent = Agent(
+        model,
+        build_default_registry(),
+        system_prompt=get_prompt(args.prompt),
+        max_turns=args.max_turns,
+    )
     return agent, model
 
 
@@ -86,6 +92,7 @@ def run(args) -> dict:
 
     return {
         "model": args.model,
+        "prompt": args.prompt,
         "mode": "live" if (args.live or args.record) else "replay",
         "results": [
             {
@@ -115,13 +122,23 @@ def summarize(report: dict) -> None:
     rows = report["results"]
     passed = sum(1 for r in rows if r["passed"])
 
+    usage = report["usage"]
+    transcript = sum(r["tokens"] for r in rows)
+    amplification = usage["total_tokens"] / max(1, transcript)
+
     print()
     print("=" * 72)
-    print(f"pass rate      : {passed}/{len(rows)}  ({100 * passed / max(1, len(rows)):.1f}%)")
-    print(f"total tokens   : {report['usage']['total_tokens']}")
-    print(f"tool calls     : {sum(r['tool_calls'] for r in rows)}"
+    print(f"pass rate       : {passed}/{len(rows)}  ({100 * passed / max(1, len(rows)):.1f}%)")
+    print(f"prompt          : {report.get('prompt', 'default')}")
+    print()
+    print("cost, two numbers that are both real:")
+    print(f"  billed tokens  : {usage['total_tokens']}  ({usage['calls']} api calls)")
+    print(f"  final transit  : {transcript}  (sum of each answer length)")
+    print(f"  amplification  : {amplification:.2f}x  (history resent once per turn)")
+    print()
+    print(f"tool calls      : {sum(r['tool_calls'] for r in rows)}"
           f"  (failed: {sum(r['failed_calls'] for r in rows)})")
-    print(f"retries        : {sum(r['retries'] for r in rows)}")
+    print(f"retries         : {sum(r['retries'] for r in rows)}")
     print()
 
     by_category: dict[str, list[bool]] = defaultdict(list)
@@ -143,26 +160,50 @@ def summarize(report: dict) -> None:
 
 
 def compare(paths: list[str]) -> None:
+    missing = [p for p in paths if not Path(p).exists()]
+    if missing:
+        for path in missing:
+            print(f"error: report not found: {path}", file=sys.stderr)
+        print("       run the evaluation with --report first, once per variant", file=sys.stderr)
+        return
+
     reports = [json.loads(Path(p).read_text(encoding="utf-8")) for p in paths]
+    names = [f"{Path(p).stem}" for p in paths]
     ids = [r["id"] for r in reports[0]["results"]]
 
-    print(f"{'task':12}" + "".join(f"{Path(p).name:>18}" for p in paths) + "   change")
-    print("-" * 72)
+    width = max(14, max(len(n) for n in names) + 2)
+    print(f"{'task':14}" + "".join(f"{n:>{width}}" for n in names) + "   change")
+    print("-" * (14 + width * len(names) + 12))
+
+    regressed = fixed = 0
     for task_id in ids:
         marks = []
         for report in reports:
-            row = next(r for r in report["results"] if r["id"] == task_id)
-            marks.append("PASS" if row["passed"] else "FAIL")
+            row = next((r for r in report["results"] if r["id"] == task_id), None)
+            marks.append("PASS" if row and row["passed"] else "FAIL")
         change = ""
         if marks[0] != marks[-1]:
-            change = "  REGRESSED" if marks[0] == "PASS" else "  FIXED"
-        print(f"{task_id:12}" + "".join(f"{m:>18}" for m in marks) + change)
-    print("-" * 72)
-    for report, path in zip(reports, paths):
+            if marks[0] == "PASS":
+                change = "  REGRESSED"
+                regressed += 1
+            else:
+                change = "  FIXED"
+                fixed += 1
+        print(f"{task_id:14}" + "".join(f"{m:>{width}}" for m in marks) + change)
+
+    print("-" * (14 + width * len(names) + 12))
+    for report, name in zip(reports, names):
         rows = report["results"]
         passed = sum(1 for r in rows if r["passed"])
-        print(f"{Path(path).name:12} {passed}/{len(rows)} passed, "
-              f"{report['usage']['total_tokens']} tokens")
+        usage = report["usage"]
+        transcript = sum(r["tokens"] for r in rows)
+        print(f"{name:14} {passed}/{len(rows)} passed | "
+              f"{usage['total_tokens']} billed tokens | "
+              f"{usage['total_tokens'] / max(1, transcript):.2f}x amp | "
+              f"prompt={report.get('prompt', 'default')} | "
+              f"{sum(r['tool_calls'] for r in rows)} tool calls")
+    if regressed or fixed:
+        print(f"{fixed} fixed, {regressed} regressed")
 
 
 def main() -> int:
@@ -176,6 +217,7 @@ def main() -> int:
     parser.add_argument("--model", default="deepseek-chat")
     parser.add_argument("--base-url", default="https://api.deepseek.com")
     parser.add_argument("--max-turns", type=int, default=8)
+    parser.add_argument("--prompt", default="default", choices=["default", "retrieval"])
     args = parser.parse_args()
 
     if args.compare:

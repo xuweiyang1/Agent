@@ -72,5 +72,40 @@ class GradeTests(unittest.TestCase):
                 )
 
 
+class PromptTests(unittest.TestCase):
+    def test_both_variants_exist_and_differ(self):
+        from agentloop.prompts import PROMPTS
+
+        self.assertEqual(set(PROMPTS), {"default", "retrieval"})
+        self.assertNotEqual(PROMPTS["default"], PROMPTS["retrieval"])
+
+    def test_retrieval_prompt_actually_asks_for_retrieval(self):
+        from agentloop.prompts import RETRIEVAL_FIRST
+
+        lowered = RETRIEVAL_FIRST.lower()
+        self.assertIn("search the knowledge base", lowered)
+        self.assertIn("does not cover", lowered, "must instruct the model to flag a gap")
+
+    def test_unknown_prompt_name_fails_loudly(self):
+        from agentloop.prompts import get
+
+        with self.assertRaises(KeyError):
+            get("nope")
+
+    def test_a_negative_task_answer_must_label_its_source(self):
+        """The retrieval prompt allows a general answer, so grading must still
+        require the model to say the knowledge base does not cover it."""
+        task = Task(
+            id="t",
+            category="negative",
+            question="What is the capital of Peru?",
+            must_contain_any=[["knowledge base", "no entry"]],
+        )
+        labelled = "The knowledge base does not cover this. From my own knowledge, Lima."
+        self.assertTrue(grade(task, labelled)[0])
+        unlabelled = "The capital of Peru is Lima."
+        self.assertFalse(grade(task, unlabelled)[0])
+
+
 if __name__ == "__main__":
     unittest.main()
