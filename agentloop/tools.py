@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
+from .corpus import CORPUS
 from .llm import ToolCall
 
 _WORD = re.compile(r"[a-z0-9]+")
@@ -182,19 +183,7 @@ def _snippet(body: str, query: str, width: int = 140) -> str:
 
 def build_default_registry(corpus: dict[str, str] | None = None) -> ToolRegistry:
     """A registry with two offline tools, enough to exercise the loop."""
-    data = corpus or {
-        "agent-loop": "An agent loop alternates model calls with tool calls "
-        "until the model stops requesting tools.",
-        "context-window": "The context window is a hard budget of tokens "
-        "shared by system prompt, history, and tool output.",
-        "backoff": "Exponential backoff retries a transient failure with "
-        "growing delays, and is a safety requirement once writes are involved. "
-        "A retryable error is one a later attempt can succeed on, such as a "
-        "rate limit or a timeout; a non-retryable error will fail the same "
-        "way every time.",
-        "tool-registry": "The tool registry maps a tool name to its schema and "
-        "its implementation, and validates arguments before calling it.",
-    }
+    data = CORPUS if corpus is None else corpus
 
     registry = ToolRegistry()
 

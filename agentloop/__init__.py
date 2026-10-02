@@ -6,19 +6,24 @@ compaction. Every piece is small enough to read in one sitting.
 """
 
 from .context import CompactionResult, compact, estimate_tokens, message_tokens
+from .corpus import CORPUS
+from .eval import Task, TaskResult, grade, load_tasks
 from .llm import FakeModel, FlakyModel, LLMError, Message, Model, ToolCall
 from .runtime import Agent, AgentResult, ToolResult
-from .tools import Tool, ToolError, ToolRegistry, build_default_registry
+from .tools import Tool, ToolError, ToolRegistry, build_default_registry, rank_entries
 
 __all__ = [
     "Agent",
     "AgentResult",
+    "CORPUS",
     "CompactionResult",
     "FakeModel",
     "FlakyModel",
     "LLMError",
     "Message",
     "Model",
+    "Task",
+    "TaskResult",
     "Tool",
     "ToolCall",
     "ToolError",
@@ -27,5 +32,8 @@ __all__ = [
     "build_default_registry",
     "compact",
     "estimate_tokens",
+    "grade",
+    "load_tasks",
     "message_tokens",
+    "rank_entries",
 ]
