@@ -421,9 +421,12 @@ docker run -p 8080:8080 fs-mcp
 curl http://localhost:8080/healthz
 ```
 
-Not yet verified: Docker is not installed on the machine this was written
-on, so the image has not been built here. The file records the intended
-deployment; treat the first build as the check, not this paragraph.
+Verified by building and running it: the container answers
+`{"ok": true, "service": "fs-mcp", "rooted": "data"}` on `/healthz`.
+The first build crashed on startup with "no sandbox root configured", which
+is why the image sets `FS_SANDBOX_ROOT=/data` and `check_docs.py` now demands
+a root in the recipe -- a build that succeeds is not evidence the container
+starts.
 
 ### Charts: cheap output, expensive input
 
