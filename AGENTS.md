@@ -114,3 +114,11 @@ python scripts\demo_chain.py                   # 全链路：图片 -> 待办 ->
 - **docstring 写清楚一件事：`check_docs.py` 绝不能跑整套测试。** 第一版它跑了，
   而 `tests/test_docs.py` 又调它，于是无限递归，python 进程淹了机器。现在它用
   AST 解析数测试函数，不执行。
+- **`python` 可能不是你以为的那个。** 落地机上 `python` 解析到 Anaconda base，而
+  base 里没有 `langgraph`，于是 3 个模块导入失败、只跑出 339 项并全变红——看着像
+  代码坏了，其实只是解释器不对。先 `python -c "import sys; print(sys.executable)"`
+  确认，再决定用 Anaconda 装依赖还是改用仓库指定的绝对路径解释器。
+- **能 build 不等于能 run。** 第一个 Dockerfile 构建干净通过，容器却启动即崩：
+  `no sandbox root configured`——`file_system_server` 拒绝猜根目录，而镜像里没设。
+  修复是 `ENV FS_SANDBOX_ROOT=/data` + `RUN mkdir -p /data`；`check_docs.py` 现在
+  会静态要求 Dockerfile 里有 `CMD` 和沙箱根，别把这两行删了。
