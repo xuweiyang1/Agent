@@ -1,4 +1,4 @@
-# Runtime dependencies for agentkit / mcp_server / retrieval.
+# Runtime dependencies for agentkit / mcp_server / retrieval / graph.
 #
 # agentloop/ is deliberately stdlib-only and needs nothing from this file --
 # that is what keeps the W1 loop readable and the tests free of install steps.
@@ -11,7 +11,12 @@ fastapi>=0.141          # the HTTP surface
 uvicorn>=0.54           # serving the cloud app locally
 mcp>=2.2                # MCP SDK; 2.x renamed FastMCP -> MCPServer
 matplotlib>=3.10        # the chart tool (M2); Agg backend, no display needed
+langgraph>=1.2          # W4: the planner's StateGraph and checkpointing
 
 # Not imported directly, but starlette's TestClient requires it and the test
 # suite uses TestClient throughout.
 httpx>=0.28
+
+# Note on Python: 3.10 works, but langgraph's ``interrupt()`` does not -- it
+# needs the 3.11 task context to find the runnable config. W4 uses a static
+# ``interrupt_before`` breakpoint instead; see graph/nodes.py.

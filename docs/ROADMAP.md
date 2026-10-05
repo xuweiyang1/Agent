@@ -78,7 +78,7 @@ Agent loop：retry/backoff、context compaction、tool dispatch、13 题评测�
 - **面试锚点**：**检索器复用，naive 留基线，agentic 才是交付物**。
   谁把 naive 当终点，谁就做成"agent 包 RAG"而不是 agentic RAG。
 
-### W4 规划 Agent（LangGraph）
+### W4 规划 Agent（LangGraph，已完成）
 - **目标**："规划周末旅行"：搜目的地 -> 查天气 -> 比价 -> 生成行程，每步结果决定下一步。
 - **交付**：`graph/`（`state.py` / `nodes.py` / `build.py` / `checkpoint.py`）。
 - **验收**：中途中断能从 checkpoint 恢复。
@@ -208,6 +208,10 @@ tests/               # 离线测试
   基线数字：hit 0.90 / mrr 0.90 / answer 0.92；multi_hop 命中 0.67
   （multi-01 缺 `context-window`，是 W6 要修的具体案例）。
   21 项新测试，全量 245 项离线通过。入口 `python scripts/rag_baseline.py`。
+
+- W4 已完成（`graph/`）：LangGraph StateGraph（node / edge / 条件分支 / checkpoint）、
+  复用 W2 工具的薄节点层、纯函数决策层（`plan.py`）、静态断点式人工审批 +
+  `InMemorySaver` 恢复。26 项新测试，全量 271 项离线通过。入口 `python scripts/demo_w4.py`。
 
 ## 10. 风险与取舍
 

@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 245 tests. If it does, everything below is
+That command should print `OK` with 271 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -40,6 +40,7 @@ python demo.py                      # W1: the loop, with a trace
 python scripts\demo_w2.py           # W2: tool calling, all three failure modes
 python scripts\demo_w3.py           # W3: sandbox escapes, MCP, charts
 python scripts\rag_baseline.py       # W3.5: the retrieval baseline numbers
+python scripts\demo_w4.py            # W4: the planner, its branches and its checkpoint
 python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 
@@ -69,6 +70,7 @@ non-obvious decision is explained in a docstring at the point it matters.
 | `agentloop/tools.py` | Tool registry, argument validation, error containment, two offline tools |
 | `agentloop/context.py` | Token estimation and compaction that never orphans a tool result |
 | `agentloop/runtime.py` | The loop itself: turns, dispatch, backoff, truncation, observer hooks |
+| `graph/` | W4: the LangGraph planner -- `plan.py` (decisions), `nodes.py` (thin), `build.py` (wiring) |
 | `agentloop/providers/` | OpenAI-compatible adapter (DeepSeek, Moonshot, Qwen), plus record and replay transports |
 
 ## Run it
@@ -407,6 +409,74 @@ back through the transcript as text, and a PNG as a data URL is roughly a
 hundred thousand characters -- which would undo every token saving in
 `messages.py`. So the default result is a path and a digest (under 500
 characters); inline bytes are opt-in. The demo prints both numbers.
+
+## W4: a planner that branches on what it finds (`graph`)
+
+A weekend trip, planned in four dependent steps: search destinations, check
+the forecast, convert the price, draft the itinerary. The point is not the
+itinerary -- it is that each step consumes the previous one's result, and the
+plan changes when a tool result says it should.
+
+```powershell
+python scripts\demo_w4.py
+python -m unittest tests.test_graph -v
+```
+
+| File | Responsibility |
+| --- | --- |
+| `graph/plan.py` | every decision, as pure functions over plain dicts |
+| `graph/state.py` | the state contract, with reducers where history must accumulate |
+| `graph/nodes.py` | the thin layer: call a tool, call a decision, return a delta |
+| `graph/edges.py` | the routing functions, testable without compiling a graph |
+| `graph/build.py` | the wiring diagram: nodes, edges, conditional branches |
+| `graph/checkpoint.py` | saver selection and the `thread_id` handle |
+
+### Nodes stay thin, decisions stay outside
+
+LangGraph is a scheduler, not a place to think. Each node reads state, calls
+one function in `plan.py`, and returns the keys it owns. The test of whether
+that held is simple: delete LangGraph and the decisions are still callable,
+which is exactly how the first half of `tests/test_graph.py` tests them --
+no graph, no checkpointer, no key.
+
+The ROADMAP warned that this framework's API moves. The answer is that the
+volatile surface is six short methods in `nodes.py` and the wiring in
+`build.py`; everything that took thought is in files that do not import it.
+
+### The branches that make it a planner
+
+- **No candidates** -> rewrite the query and search again. Rewriting rather
+  than re-running, because asking the same index the same question twice
+  cannot help.
+- **Weather says rain** -> the outdoor half of the itinerary moves indoors.
+  This is the branch that makes the forecast change the plan instead of being
+  printed next to it.
+- **Nothing viable** (all wet, or all over budget) -> back to search with a
+  broader query, up to a cap, then an explicit give-up that records why.
+- **Rejected by the human** -> the destination goes into `avoid` and the loop
+  re-enters search, so the next offer is genuinely different.
+
+### Checkpointing is not a cache
+
+The run pauses before the approval gate and resumes from the checkpoint, so a
+person decides between two invocations rather than inside one. `get_state`
+answers "what did it know when it paused" and `get_state_history` answers "how
+did it get there" -- which is what makes a plan auditable.
+
+One version trap, recorded because it cost real debugging time: `interrupt()`
+needs the runnable config, which LangGraph propagates through a Python 3.11
+task context. On 3.10 every async run failed with "Called get_config outside
+of a runnable context", so the gate is a static `interrupt_before` breakpoint
+instead. `nodes.py` has the full note; upgrading the interpreter is what would
+allow the tidier form back.
+
+### W4 numbers
+
+- 26 tests added, 271 total, offline, no key
+- an approved run: search -> weather -> price -> decide -> approve
+- a rejected run: the same path again with a rewritten query, and a different city
+- a dead search tool: three attempts, then an explicit give-up -- never an exception
+- a dead weather tool: the unforecastable city is dropped, the run still plans
 
 ## W3 numbers
 
