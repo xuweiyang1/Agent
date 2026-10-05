@@ -61,6 +61,8 @@ ENTRY_POINTS: tuple[str, ...] = (
     "scripts/demo_w3.py",
     "scripts/rag_baseline.py",
     "scripts/check_docs.py",
+    "scripts/serve_local.py",
+    "assistant/webapp.py",
     "requirements.txt",
     "AGENTS.md",
     "docs/ROADMAP.md",

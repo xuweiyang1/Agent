@@ -281,6 +281,16 @@ tests/               # 离线测试
   但在这个 12 chunk 的语料上，真嵌入的 dense 是**追平** BM25 而非超过，
   两者已无法区分。要看出稠密的真优势，得先扩语料。
   这是诚实的结论：哈希版「稠密输」、真嵌入版「稠密打平」，数值都留档可复现。
+- **本机部署版（阶段一）已完成**（`assistant/webapp.py` + `scripts/serve_local.py`）：
+  一个浏览器表单包住整条链——填字段或传一张照片，产出待办与日历事件，结果落到
+  state_dir 下（	odos.json / calendar.json / 
+uns/），重启不丢。三处接缝：
+  
+un_chain 新增 perceived_override（外部已读到的字段可跳过 perception，并在步骤里
+  记明"no image was read"）与 state_dir（把待办/日历换成小 JSON 存储）；ssistant/vision.py
+  是可选真视觉读图器（模型回 JSON，解析容错），没配 key 时表单照常可用。15 项新测试
+  （`tests/test_local_deploy.py`），全量 436 项离线通过。入口 `python scripts/serve_local.py`。
+  阶段二（上线版：多用户、鉴权、DB）在此之上加，链与工具不动。
 - Dockerfile 已就位并**实测构建运行通过**（根目录 `Dockerfile` + `.dockerignore`）：
   `python:3.10-slim` + `requirements.txt` + `python -m mcp_server.cloud --host 0.0.0.0`。
   `healthz` 返回 `{"ok": true, "rooted": "data"}`。第一次构建能过、容器却

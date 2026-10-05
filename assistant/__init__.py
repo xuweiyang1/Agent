@@ -106,6 +106,8 @@ async def run_chain(
     memory_query: str = "which destination did I reject, and why",
     use_retrieval: bool = True,
     allow_substitution: bool = False,
+    perceived_override: dict[str, str] | None = None,
+    state_dir: str | Path | None = None,
 ) -> ChainRun:
     """Run the whole assistant chain once and return its evidence.
 
@@ -135,22 +137,44 @@ async def run_chain(
     run = ChainRun(request=request, board_lines=[str(line) for line in board_lines], perceived={})
 
     # -- 1. perception -----------------------------------------------------
-    step, perceived = perceive_step(
-        engine=reader,
-        board_lines=board_lines,
-        known_lines=meanings,
-        image_path=workdir / "board.png",
-        title="weekend note",
-        scale=scale,
-    )
-    run.steps.append(step)
-    run.artifacts["board"] = str(step.inputs.get("image", ""))
-    run.perceived = _interpret(perceived, meanings)
+    # Two ways in, and the difference is stated rather than hidden. The default
+    # renders a board and reads it back through ``engine``; a caller who already
+    # has the fields (the local web form, or a vision model upstream of this
+    # call) passes ``perceived_override`` and the pixels are skipped. The
+    # override path records where the fields came from, so a run that did not
+    # go through OCR cannot later be read as though it had.
+    if perceived_override is not None:
+        run.perceived = {str(k): str(v) for k, v in perceived_override.items() if str(v).strip()}
+        run.artifacts["board"] = ""
+        run.steps.append(
+            StepResult(
+                name="perceive",
+                ok=bool(run.perceived),
+                detail=(
+                    f"fields supplied directly ({len(run.perceived)}); "
+                    "no image was read on this path"
+                ),
+                inputs={"source": "override"},
+                outputs={"perceived": "; ".join(sorted(run.perceived.values()))},
+            )
+        )
+    else:
+        step, perceived = perceive_step(
+            engine=reader,
+            board_lines=board_lines,
+            known_lines=meanings,
+            image_path=workdir / "board.png",
+            title="weekend note",
+            scale=scale,
+        )
+        run.steps.append(step)
+        run.artifacts["board"] = str(step.inputs.get("image", ""))
+        run.perceived = _interpret(perceived, meanings)
 
     # A chain that cannot read its own input must not continue with a guess.
     # Stopping here is the honest failure: the alternative is planning for a
     # destination nobody named.
-    if not step.ok:
+    if not run.perceived:
         run.answer = "the board could not be read; nothing was planned"
         return run
 
@@ -227,6 +251,20 @@ async def run_chain(
         run.steps.append(retrieve_step(retriever=retriever, graph_state=state))
 
     # -- 5/6/7. actions ----------------------------------------------------
+    # A local deployment wants todos and events to survive a restart, so a
+    # ``state_dir`` turns the two in-memory services into small JSON stores. The
+    # default (None) keeps them in memory, which is what the weekly tests want.
+    todo_service = None
+    calendar_service = None
+    if state_dir is not None:
+        from agentkit.tools.calendar import CalendarService
+        from agentkit.tools.todo import TodoService
+
+        store = Path(state_dir)
+        store.mkdir(parents=True, exist_ok=True)
+        todo_service = TodoService(path=store / "todos.json")
+        calendar_service = CalendarService(path=store / "calendar.json")
+
     registry = build_registry(
         chart_output_dir=str(workdir / "charts"),
         with_todos=True,
@@ -234,6 +272,8 @@ async def run_chain(
         with_weather=False,
         with_fx=False,
         with_search=False,
+        todo_service=todo_service,
+        calendar_service=calendar_service,
     )
     invoker = ToolInvoker(registry, default_timeout=10.0)
 

@@ -14,5 +14,7 @@ env/
 .ruff_cache/
 runs/
 traces/
+# Local deployment state (todos, events, run logs); machine-local, never shared
+.localstate/
 # Third-party tools cloned for local reference only
 _tools/
