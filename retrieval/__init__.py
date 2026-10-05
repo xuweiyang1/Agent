@@ -13,11 +13,16 @@ from .chunking import (
     chunk_document,
     chunk_text,
 )
+from .index import BM25Index, ScoredChunk, VectorStore, build_index
 
 __all__ = [
+    "BM25Index",
     "DEFAULT_OVERLAP",
     "DEFAULT_SIZE",
     "Chunk",
+    "ScoredChunk",
+    "VectorStore",
+    "build_index",
     "chunk_corpus",
     "chunk_document",
     "chunk_text",

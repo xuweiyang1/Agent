@@ -125,6 +125,17 @@ def tokenize(text: str) -> list[str]:
     return [w for w in _WORD.findall(text.lower()) if len(w) > 1 and w not in _STOPWORDS]
 
 
+def stem_tokens(text: str) -> list[str]:
+    """Tokenize and stem in one pass.
+
+    Public because it is the unit of indexing, not an internal detail: BM25 in
+    ``retrieval`` has to stem its documents and its queries identically, and a
+    second copy of the stemmer would be a second place for the retry/retries
+    bug to reappear. Anything that builds a term index should use this.
+    """
+    return [_stem(w) for w in tokenize(text)]
+
+
 def _stem(word: str) -> str:
     """Strip the few suffixes that actually show up in this corpus.
 
@@ -147,14 +158,14 @@ def rank_entries(query: str, corpus: dict[str, str]) -> list[tuple[str, int]]:
     Title hits score double: a term in the key is a stronger signal than the
     same term buried in the body.
     """
-    terms = {_stem(t) for t in tokenize(query)}
+    terms = set(stem_tokens(query))
     if not terms:
         return []
 
     scored: list[tuple[str, int]] = []
     for key, body in corpus.items():
-        key_terms = {_stem(t) for t in tokenize(key)}
-        body_terms = {_stem(t) for t in tokenize(body)}
+        key_terms = set(stem_tokens(key))
+        body_terms = set(stem_tokens(body))
         score = 2 * len(terms & key_terms) + len(terms & body_terms)
         if score:
             scored.append((key, score))
@@ -172,7 +183,7 @@ def _snippet(body: str, query: str, width: int = 140) -> str:
     """
     if len(body) <= width:
         return body
-    terms = {_stem(t) for t in tokenize(query)}
+    terms = set(stem_tokens(query))
     lowered = tokenize(body)
     for index, word in enumerate(lowered):
         if _stem(word) in terms:
