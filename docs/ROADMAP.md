@@ -100,7 +100,7 @@ Agent loop：retry/backoff、context compaction、tool dispatch、13 题评测�
 - **面试锚点**：现在考的是"何时检索"，不是"怎么搭"；
   W5 的长期记忆向量库就是 W6 的 retriever，一次建设两处复用。
 
-### W7 多 Agent：只做"单 vs 多"对比实验（下一步）
+### W7 多 Agent：只做"单 vs 多"对比实验（已完成）
 - **目标**：Researcher / Writer / Reviewer + Supervisor 的**最小**版本，
   用数字证明什么时候该上多 Agent、什么时候是浪费。
 - **交付**：对比报告（token 成本 / 成功率 / 通信开销）。
@@ -225,6 +225,15 @@ tests/               # 离线测试
   成本检索次数 1.00 -> 1.92、token 3921 -> 4274；答案准确率 0.92 不变，因为离线抽取式
   生成器无法跨篇组合——`multi-01` 的 coverage 已 0.50 -> 1.00，bottleneck 已从检索转到生成。
   34 项新测试，全量 335 项离线通过。入口 `python scripts/rag_compare.py`。
+
+- W7 已完成（`agents/`）：最小 Supervisor 团队（Researcher -> Writer -> Reviewer），
+  `Handoff` / `Mailbox` 把通信开销独立计量（按 hop 与边分别记账），有界修订回路
+  （复核缺失项以 key 回传再填，不重新检索），`SingleAgent` 是最强诚实基线（同证据、
+  同写作容量，只少一次复核）。对比报告用单一变量（brief 条目数）算出盈亏平衡点：
+  **4 条以上才回本**（4 条：coverage 0.75 -> 1.00，代价 5.66x token）；3 条以内团队付
+  ~2.9x 成本、零收益。通信占团队账单 30-42%，P2 规则实测：交接传摘要 vs 全转录，
+  factor 从 1.4x 扩到 3.0x（摘要随 brief 增长，转录随 hop 累积）。
+  32 项新测试，全量 367 项离线通过。入口 `python scripts/rag_agents.py`。
 
 ## 10. 风险与取舍
 

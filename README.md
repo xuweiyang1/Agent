@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 335 tests. If it does, everything below is
+That command should print `OK` with 367 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -43,6 +43,7 @@ python scripts\rag_baseline.py       # W3.5: the retrieval baseline numbers
 python scripts\demo_w4.py            # W4: the planner, its branches and its checkpoint
 python scripts\demo_w5.py            # W5: three memory layers, across a restart
 python scripts\rag_compare.py       # W6: naive vs agentic retrieval, side by side
+python scripts\rag_agents.py        # W7: single vs multi-agent, and the break-even
 python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 
@@ -411,6 +412,88 @@ back through the transcript as text, and a PNG as a data URL is roughly a
 hundred thousand characters -- which would undo every token saving in
 `messages.py`. So the default result is a path and a digest (under 500
 characters); inline bytes are opt-in. The demo prints both numbers.
+
+## W7: a team, and the number that says when not to use one (`agents`)
+
+W6 asked whether retrieval should be a decision. W7 asks the same question
+about **more agents**, and gives it the same kind of answer: a measured
+break-even point, not an opinion.
+
+Anthropic's own multi-agent report ends with a warning not to reach for a team
+by default, so the week is an experiment rather than a team-building exercise.
+The arrangement is the smallest one that can show what a team is actually
+*for*: Supervisor routes Researcher -> Writer -> Reviewer, and the reviewer can
+send the draft back once.
+
+```powershell
+python scripts\rag_agents.py
+python scripts\rag_agents.py --save eval/multi-agent.json
+python -m unittest tests.test_agents -v
+```
+
+| File | Responsibility |
+| --- | --- |
+| `agents/protocol.py` | what crosses the wire (`Handoff`), and the accountant for it (`Mailbox`) |
+| `agents/roles.py` | the three roles, plus `SingleAgent`'s honest baseline |
+| `agents/team.py` | the supervisor's routing and the bounded revision loop |
+| `agents/experiment.py` | one variable, both strategies, and the computed break-even |
+
+### The gain is separable objectives, not more intelligence
+
+The reviewer's whole job is to find what is *missing*, and that is
+structurally unavailable to a single pass -- one pass cannot audit itself with
+information it does not have. Everything else is left out: no debate, no
+voting, no negotiation. A bigger arrangement produces a bigger bill and the
+same conclusion.
+
+The honest baseline is the part most comparisons get wrong. `SingleAgent`
+gathers the *same* evidence and gets the *same* writing room; only the review
+loop is withheld. If the single agent had less room, the experiment would be
+measuring the room.
+
+### The break-even point
+
+```
+brief single cov  team cov   gain single tok  team tok  premium comm share  iters
+    1       1.00      1.00  +0.00        100       295    2.95x       41%      1
+    3       1.00      1.00  +0.00        234       668    2.85x       42%      1
+    4       0.75      1.00  +0.25        265      1499    5.66x       40%      2
+   10       0.30      1.00  +0.70        449      2452    5.46x       30%      2
+```
+
+**Break-even: briefs requiring 4+ items.** Below the writing room (3 items
+per pass) the team pays ~2.9x for *zero* coverage gain -- the review loop has
+nothing to catch. Above it, the single agent's coverage falls off as
+`capacity / size` while the reviewer recovers what the first pass structurally
+could not, for ~5.6x. That is the whole argument, and it is why "use a team
+for hard tasks" needs the word *hard* quantified.
+
+### Communication is 30-42% of the bill, so hand it a summary
+
+The second table is the control for the ROADMAP's P2 rule: the same team, same
+briefs, only the handoff policy swapped from summaries to full transcripts.
+
+```
+brief   summary  transcript   factor
+    1       122         166     1.4x
+   10       739        2217     3.0x
+```
+
+A full transcript compounds with the *hops* taken; a summary grows only with
+the brief's keys. The factor widening from 1.4x to 3.0x is the P2 rule as a
+measurement rather than advice. `FULL_TRANSCRIPT` stays callable for exactly
+that reason -- it is the control that makes the saving visible.
+
+### Why the numbers are trustworthy
+
+`TeamResult.total_tokens` sums prompt + completion + **communication** in one
+property, so a report cannot accidentally compare the team's everything
+against the single agent's thinking-only figure. That is the most flattering
+possible mistake and the one a reader would not catch.
+
+`RoleModel` in `agents/roles.py` is the seam a real model would fill; the
+offline implementation is deterministic so the break-even is reproducible for
+free.
 
 ## W6: retrieval as a decision, not a stage (`retrieval`)
 
