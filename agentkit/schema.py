@@ -1,0 +1,106 @@
+﻿"""Tool schemas, generated from Pydantic v2 models.
+
+W1 hand-wrote its JSON schemas, and the docstring there argued that was
+deliberate. W2 reverses that on purpose, and the reason is worth stating:
+once tools take structured arguments, a hand-written schema and the function
+that consumes it drift apart. The schema says ``string``, the function
+annotates ``int``, and nothing catches it until a model sends the wrong type
+at runtime.
+
+Here the Pydantic model *is* the contract. ``model_json_schema`` renders it
+for the model, and ``model_validate`` enforces the same rules on the way in,
+so the published contract and the enforced one cannot disagree. The model
+field descriptions are the docstrings the model actually reads, which is why
+they are written for a reader trying to call the tool correctly.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Callable
+
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from .errors import ErrorKind, ToolCallError
+
+
+class ToolArgs(BaseModel):
+    """Base class for every tool's argument model.
+
+    ``extra="forbid"`` is the important default. A model that invents an
+    argument name should be told so, not have the key silently dropped --
+    silently ignoring it produces a plausible-looking wrong answer, which is
+    the most expensive failure mode to debug.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def _first_error(exc: ValidationError) -> dict[str, Any]:
+    """Reduce a Pydantic error to the field, the problem, and the fix.
+
+    Pydantic reports every problem at once, which is thorough but noisy in a
+    transcript the model has to reread each turn. The first error is enough
+    to unblock the next attempt, and ``expected`` is what makes the message
+    actionable rather than merely negative.
+    """
+    first = exc.errors()[0]
+    location = ".".join(str(part) for part in first.get("loc", ())) or "(root)"
+    expected = first.get("expected")
+    detail: dict[str, Any] = {
+        "argument": location,
+        "problem": first.get("msg", "invalid"),
+    }
+    if expected:
+        detail["expected"] = expected
+    if isinstance(first.get("input"), (str, int, float, bool)):
+        detail["got"] = first["input"]
+    return detail
+
+
+def validate_args(model: type[ToolArgs], arguments: dict[str, Any], *, tool: str) -> ToolArgs:
+    """Validate raw arguments, raising a classified ``BAD_ARGUMENTS`` failure.
+
+    This is the single choke point between "what the model sent" and "what
+    the tool receives", so it is also the natural place to guarantee the tool
+    function never sees a malformed argument.
+    """
+    try:
+        return model.model_validate(arguments)
+    except ValidationError as exc:
+        detail = _first_error(exc)
+        raise ToolCallError(
+            f"{tool}: argument {detail['argument']!r} is invalid "
+            f"({detail['problem']})",
+            kind=ErrorKind.BAD_ARGUMENTS,
+            details=detail,
+        ) from exc
+
+
+def schema_for(model: type[ToolArgs]) -> dict[str, Any]:
+    """Render one argument model as a tool ``parameters`` object.
+
+    ``additionalProperties`` is set explicitly because the JSON Schema
+    default is permissive, which would contradict ``extra="forbid"`` in the
+    model. The published schema and the enforced model must say the same
+    thing, or the model is being graded against rules it was never shown.
+    """
+    schema = model.model_json_schema()
+    schema.pop("title", None)
+    schema.setdefault("type", "object")
+    schema["additionalProperties"] = False
+    return schema
+
+
+def schema_from_signature(fn: Callable[..., Any]) -> dict[str, Any]:
+    """Fallback for a plain function with no argument model.
+
+    Not every tool needs typed arguments -- a zero-argument tool is a real
+    case. Rather than inventing a model for it, this returns the empty object
+    schema, which is also what a model correctly reads as "call me with no
+    arguments".
+    """
+    _ = fn  # signature inspection is enough for now; kept for API symmetry
+    return {"type": "object", "properties": {}, "additionalProperties": False, "required": []}
+
+
+__all__ = ["ToolArgs", "schema_for", "schema_from_signature", "validate_args"]
