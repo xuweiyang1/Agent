@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 244 tests. If it does, everything below is
+That command should print `OK` with 245 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -40,6 +40,7 @@ python demo.py                      # W1: the loop, with a trace
 python scripts\demo_w2.py           # W2: tool calling, all three failure modes
 python scripts\demo_w3.py           # W3: sandbox escapes, MCP, charts
 python scripts\rag_baseline.py       # W3.5: the retrieval baseline numbers
+python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 
 None of these need an API key. `agentloop/` needs no third-party packages at

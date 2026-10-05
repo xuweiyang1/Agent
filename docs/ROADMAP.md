@@ -207,7 +207,7 @@ tests/               # 离线测试
   为 W6 换 Chroma/Milvus 留口）、Naive RAG 管道与基线报告。
   基线数字：hit 0.90 / mrr 0.90 / answer 0.92；multi_hop 命中 0.67
   （multi-01 缺 `context-window`，是 W6 要修的具体案例）。
-  21 项新测试，全量 244 项离线通过。入口 `python scripts/rag_baseline.py`。
+  21 项新测试，全量 245 项离线通过。入口 `python scripts/rag_baseline.py`。
 
 ## 10. 风险与取舍
 
