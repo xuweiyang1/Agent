@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 367 tests. If it does, everything below is
+That command should print `OK` with 390 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -44,6 +44,7 @@ python scripts\demo_w4.py            # W4: the planner, its branches and its che
 python scripts\demo_w5.py            # W5: three memory layers, across a restart
 python scripts\rag_compare.py       # W6: naive vs agentic retrieval, side by side
 python scripts\rag_agents.py        # W7: single vs multi-agent, and the break-even
+python scripts\demo_chain.py        # the whole chain: image -> todos -> calendar
 python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 
@@ -494,6 +495,84 @@ possible mistake and the one a reader would not catch.
 `RoleModel` in `agents/roles.py` is the seam a real model would fill; the
 offline implementation is deterministic so the break-even is reproducible for
 free.
+
+## The chain: one run through all of it (`assistant`)
+
+Every week above has its own demo, and each proves one thing in isolation.
+This is the ROADMAP's product promise executed as a single run: **an image
+goes in, it comes out as todos and a calendar booking, and it passed through
+memory on the way.** A chain is a different claim from a pile of parts, and it
+can fail in a way no weekly test can -- a step that works alone and cannot hand
+its result to the next one.
+
+```powershell
+python scripts\demo_chain.py
+python scripts\demo_chain.py --board-city Berlin   # watch the guard stop the run
+python -m unittest tests.test_chain -v
+```
+
+```
+1. [ok ] perceive: read 4/4 board row(s) at confidence 100%
+2. [ok ] memory: 2 preference(s), 2 recalled, 2 past rejection(s)
+      avoid: Sydney, Tokyo
+3. [ok ] plan: chose Lisbon for 1880.87 CNY
+      query: plan a weekend trip Lisbon
+4. [ok ] retrieve: 1 retrieval(s), 5 citation(s)
+5. [ok ] todos: created 3 of 3 todo(s)
+6. [ok ] calendar: booked 2 night(s) from 2026-10-10 (weekend resolved from the board)
+7. [ok ] chart: rendered a 3-bar comparison
+8. [ok ] persist: wrote 6 record(s) to long-term memory
+9. [ok ] govern: revision loop: single-pass coverage was 0.75
+```
+
+### The request names none of the facts
+
+The request is `plan a weekend trip`. The city, the budget, the date and the
+note arrive **only** through the board. That is the whole point, and it is
+pinned by a test that asserts the request text contains none of the values the
+todos end up carrying -- otherwise this would be a keyword parser wearing an
+image as a costume.
+
+Perception is real, not a lookup: `assistant/ocr.py` draws the board with PIL
+and recovers each row by **matching rendered pixel templates against the ink**
+(black-pixel IoU). The reader is handed the labels that may appear, never the
+values it should return, and a board that was never drawn reads as blank. A
+test asserts exactly that. `OcrEngine` is the seam a vision model fills later.
+
+### The joints are where the value is
+
+Each step publishes what it received and what it produced, so the demo is the
+actual handoff rather than a narration of one. Four joints do real work:
+
+- **The board's city becomes the search query.** W4's search is lexical, so
+  `plan a weekend trip` alone retrieves whatever ranks highest and never the
+  city the user wrote down. The coordinator composes the query; W4 owns how to
+  plan, the chain owns what about.
+- **W5 changes W4's answer.** Seeded rejections become the planner's `avoid`
+  list, so a decision recorded earlier is a constraint now.
+- **The plan reaches the actions.** The destination in the todos and the
+  events is the planner's own choice, provable from the step inputs.
+- **The guard stops before acting.** If the board names a city and the plan
+  uses a different one, the run stops *before* creating anything. Recording a
+  rejection explains why the board's city was skipped; it does not license
+  swapping in Beijing. `--board-city Berlin` demonstrates it.
+
+### Governance is decided, not habitual
+
+The last step applies W7's measured rule to this run's own brief: if a single
+pass covers what the write-up needs, the review loop is **skipped**, because W7
+showed it costs about 2.9x and gains nothing below the break-even. The step
+records which strategy it chose and why, so "we did not use a team here" is a
+decision rather than an omission.
+
+### Numbers
+
+```
+perception       ~20 KB PNG, 1000x412 = 412k pixels -> ~550 tokens billed
+                 (priced like an image on the wire, not as free text)
+steps            9, all offline, no key
+typical run      ~3-4 s wall clock, dominated by template matching
+```
 
 ## W6: retrieval as a decision, not a stage (`retrieval`)
 

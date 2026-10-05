@@ -1,0 +1,164 @@
+{
+  "request": "plan a weekend trip",
+  "board_lines": [
+    "Destination - Lisbon",
+    "Budget - 9000 CNY",
+    "Trip - this weekend",
+    "Note - museum afternoon"
+  ],
+  "perceived": {
+    "destination": "Lisbon",
+    "budget": "9000 CNY",
+    "trip": "this weekend",
+    "note": "museum afternoon"
+  },
+  "ok": true,
+  "tokens": 2427,
+  "route": [],
+  "artifacts": {
+    "board": "board.png",
+    "chart": "C:\\Users\\xuweiyang\\AppData\\Local\\Temp\\assistant-chain\\charts\\chart-9523079b0ef4.png",
+    "memory": "C:\\Users\\XUWEIY~1\\AppData\\Local\\Temp\\assistant-chain\\memory.json"
+  },
+  "steps": [
+    {
+      "step": "perceive",
+      "ok": true,
+      "detail": "read 4/4 board row(s) at confidence 100%",
+      "inputs": {
+        "image": "board.png",
+        "engine": "rule-ocr",
+        "pixels": 412000
+      },
+      "outputs": {
+        "perceived": "Lisbon; 9000 CNY; this weekend; museum afternoon"
+      },
+      "tokens": 549,
+      "cost": 20.1973
+    },
+    {
+      "step": "memory",
+      "ok": true,
+      "detail": "2 preference(s), 2 recalled, 2 past rejection(s)",
+      "inputs": {
+        "query": "which destination did I reject, and why"
+      },
+      "outputs": {
+        "preferences": "hotel=quiet, away from nightlife, seat=aisle",
+        "avoid": "Berlin, Oslo"
+      },
+      "tokens": 10,
+      "cost": 0.0
+    },
+    {
+      "step": "plan",
+      "ok": true,
+      "detail": "chose Lisbon for 1880.87 CNY",
+      "inputs": {
+        "request": "plan a weekend trip",
+        "query": "plan a weekend trip Lisbon",
+        "budget": "9000 CNY",
+        "avoid": "Berlin, Oslo"
+      },
+      "outputs": {
+        "destination": "Lisbon",
+        "weather": "sunny and dry across 2 day(s); outdoor plans hold",
+        "why": "Lisbon: forecast suits outdoor plans; 1881 CNY of a 9000 budget",
+        "attempts": 4
+      },
+      "tokens": 106,
+      "cost": 0.0
+    },
+    {
+      "step": "retrieve",
+      "ok": true,
+      "detail": "1 retrieval(s), 5 citation(s)",
+      "inputs": {
+        "question": "What should a weekend in Lisbon include?"
+      },
+      "outputs": {
+        "queries": "What should a weekend in Lisbon include?",
+        "sources": "Lisbon, Sydney, Paris, Beijing, Tokyo",
+        "answer": "[1] Lisbon\nLisbon is the reliable sunny weekend: dry, bright and walkable, with enough hills to make the trams worth taking. [2] Sydney\nA Sydney weekend is outd"
+      },
+      "tokens": 361,
+      "cost": 0.0
+    },
+    {
+      "step": "todos",
+      "ok": true,
+      "detail": "created 3 of 3 todo(s)",
+      "inputs": {
+        "destination": "Lisbon",
+        "note": "museum afternoon",
+        "budget": "9000 CNY"
+      },
+      "outputs": {
+        "todos": "Book travel and stay for Lisbon | Pay the 9000 CNY trip budget for Lisbon | Reserve the museum afternoon in Lisbon"
+      },
+      "tokens": 28,
+      "cost": 0.0
+    },
+    {
+      "step": "calendar",
+      "ok": true,
+      "detail": "booked 2 night(s) from 2026-10-10 (weekend resolved from the board)",
+      "inputs": {
+        "board_trip": "this weekend",
+        "today": "2026-10-05",
+        "nights": 2
+      },
+      "outputs": {
+        "events": "2026-10-10T09:00 -> 2026-10-11T09:00 | 2026-10-11T09:00 -> 2026-10-12T09:00"
+      },
+      "tokens": 16,
+      "cost": 0.0
+    },
+    {
+      "step": "chart",
+      "ok": true,
+      "detail": "rendered a 3-bar comparison",
+      "inputs": {
+        "labels": "Lisbon, Tokyo, Beijing"
+      },
+      "outputs": {
+        "path": "C:\\Users\\xuweiyang\\AppData\\Local\\Temp\\assistant-chain\\charts\\chart-9523079b0ef4.png",
+        "inline_bytes": 0
+      },
+      "tokens": 5,
+      "cost": 0.0
+    },
+    {
+      "step": "persist",
+      "ok": true,
+      "detail": "wrote 8 record(s) to long-term memory",
+      "inputs": {
+        "session": "chain"
+      },
+      "outputs": {
+        "decision": "decision-0001",
+        "fact": "fact-0002",
+        "total": 8
+      },
+      "tokens": 50,
+      "cost": 0.0
+    },
+    {
+      "step": "govern",
+      "ok": true,
+      "detail": "revision loop: single-pass coverage was 0.75",
+      "inputs": {
+        "coverage": "0.75",
+        "max_iterations": 2
+      },
+      "outputs": {
+        "strategy": "team",
+        "iterations": 2,
+        "hops": 8,
+        "communication_tokens": 530
+      },
+      "tokens": 1302,
+      "cost": 0.0
+    }
+  ]
+}
