@@ -1,0 +1,17 @@
+# Runtime dependencies for agentkit / mcp_server / retrieval.
+#
+# agentloop/ is deliberately stdlib-only and needs nothing from this file --
+# that is what keeps the W1 loop readable and the tests free of install steps.
+#
+# Versions are floors, not pins: the tests are offline, so a newer version
+# either passes them or it does not, and that is the check.
+
+pydantic>=2.13          # tool argument models; the model is the published schema
+fastapi>=0.141          # the HTTP surface
+uvicorn>=0.54           # serving the cloud app locally
+mcp>=2.2                # MCP SDK; 2.x renamed FastMCP -> MCPServer
+matplotlib>=3.10        # the chart tool (M2); Agg backend, no display needed
+
+# Not imported directly, but starlette's TestClient requires it and the test
+# suite uses TestClient throughout.
+httpx>=0.28

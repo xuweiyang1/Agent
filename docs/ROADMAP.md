@@ -203,6 +203,11 @@ tests/               # 离线测试
   式薄 adapter 与错误翻译、云函数 ASGI 入口（挂载路径与 allowed_hosts 两个
   必设项）、M2 出图工具。68 项新测试，全量 182 项离线通过。
   入口 `python scripts/demo_w3.py`。
+- W3.5 已完成（`retrieval/`）：切片、BM25 索引（藏在 `VectorStore` 协议后，
+  为 W6 换 Chroma/Milvus 留口）、Naive RAG 管道与基线报告。
+  基线数字：hit 0.90 / mrr 0.90 / answer 0.92；multi_hop 命中 0.67
+  （multi-01 缺 `context-window`，是 W6 要修的具体案例）。
+  21 项新测试，全量 244 项离线通过。入口 `python scripts/rag_baseline.py`。
 
 ## 10. 风险与取舍
 

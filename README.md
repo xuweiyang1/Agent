@@ -1,8 +1,24 @@
 # agentloop
 
-A minimal agent runtime in pure Python, no dependencies. Built as a reading
-exercise in how an agent loop actually works: model call, tool dispatch,
-retry with backoff, context compaction.
+A seven-week build of an agent system, in Python. Each week adds one real
+capability to the same project, and every claim in here is backed by a number
+the test suite can reproduce offline.
+
+| Package | What it is | Entry point |
+| --- | --- | --- |
+| `agentloop/` | a minimal agent loop in pure stdlib: model call, tool dispatch, retry with backoff, context compaction | `python demo.py` |
+| `agentkit/` | the loop as a service: Pydantic tool schemas, five tools, an error taxonomy, async dispatch, FastAPI, messages that carry images | `python scripts/demo_w2.py` |
+| `mcp_server/` | a filesystem MCP server with a real path sandbox, plus its cloud-function entry point | `python scripts/demo_w3.py` |
+| `retrieval/` | chunking, BM25 behind a `VectorStore` protocol, and the naive RAG baseline W6 is measured against | `python scripts/rag_baseline.py` |
+
+**Everything runs offline.** No API key is needed for any test, demo, or
+baseline: the model is scripted or heuristic, the index is BM25, and network
+transports have record/replay doubles. A real model is called only when a
+number is being produced for the record.
+
+Progress and what is next: `docs/ROADMAP.md`. Working agreement:
+`docs/WORKFLOW.md`. Instructions for an agent picking this up:
+`AGENTS.md`.
 
 ## Why it exists
 
