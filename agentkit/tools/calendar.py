@@ -1,16 +1,22 @@
-"""Calendar events with real timestamp parsing.
+"""Calendar events with real timestamp parsing, optionally stored on disk.
 
 The parse is the lesson here. A model asked for "next Tuesday at 3" will send
 something like ``2026-10-06T15:00`` -- or ``2026-10-06 15:00``, or a bare
 date. Accepting the two common shapes and rejecting the rest with a message
 that names the expected format turns a confusing failure into a one-line fix,
 which is exactly what ``BAD_ARGUMENTS`` is for.
+
+Like ``todo``, storage is opt-in: tests want a fresh, in-memory calendar, while
+a local deployment wants the events to survive a restart. The file is a plain
+JSON list of event dicts so a human can fix a bad entry without a tool.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field
@@ -34,6 +40,11 @@ class CalendarArgs(ToolArgs):
 class CalendarService:
     _events: list[dict[str, Any]] = field(default_factory=list)
     _next: int = field(default=1, init=False)
+    path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.path is not None:
+            self._load()
 
     def create(self, title: str, start: str, duration_minutes: int) -> dict[str, Any]:
         begins = _parse(start)
@@ -45,6 +56,7 @@ class CalendarService:
         }
         self._next += 1
         self._events.append(event)
+        self._save()
         return event
 
     def list_events(self, day: str | None = None) -> list[dict[str, Any]]:
@@ -55,6 +67,38 @@ class CalendarService:
             (e for e in self._events if e["start"].startswith(wanted)),
             key=lambda e: e["start"],
         )
+
+    # -- persistence -------------------------------------------------------
+
+    def _save(self) -> None:
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"events": self._events, "next": self._next}
+        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _load(self) -> None:
+        assert self.path is not None
+        if not self.path.is_file():
+            return
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return
+        raw_events = payload.get("events", payload if isinstance(payload, list) else [])
+        if not isinstance(raw_events, list):
+            return
+        for event in raw_events:
+            if isinstance(event, dict) and event.get("id") and event.get("start"):
+                self._events.append(event)
+        self._next = int(payload.get("next") or self._next_from_events())
+
+    def _next_from_events(self) -> int:
+        highest = 0
+        for event in self._events:
+            digits = "".join(ch for ch in str(event.get("id", "")) if ch.isdigit())
+            highest = max(highest, int(digits) if digits else 0)
+        return highest + 1
 
 
 def _parse(raw: str) -> datetime:
@@ -97,6 +141,8 @@ def register(registry: ToolRegistry, service: CalendarService | None = None) -> 
                 )
             return {"created": svc.create(title, start, duration_minutes)}
         return {"events": svc.list_events(day)}
+
+    return svc
 
 
 __all__ = ["CalendarArgs", "CalendarService", "register"]

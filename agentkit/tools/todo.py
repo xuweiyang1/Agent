@@ -1,15 +1,24 @@
-"""A tiny in-memory todo list, mutated through one tool.
+"""A tiny todo list, mutated through one tool, optionally backed by a file.
 
 One tool with an ``action`` field rather than four tools is a deliberate
 schema choice. Four near-identical tools inflate the tool list the model reads
 every turn and make "add" versus "create" a coin flip; one tool with a small
 enum keeps the prompt short and the intent unambiguous.
+
+Persistence is opt-in for one reason: the weekly tests want a fresh service
+per test, and a service that always wrote to disk would make those tests order
+dependent. Passing ``path`` turns it into a small JSON store, which is what a
+single-user local deployment needs -- a todo list that vanishes on restart is
+a demo, not an assistant. The file format is the plain item dicts, so it can
+be read and repaired by hand.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field, model_validator
@@ -50,12 +59,18 @@ class TodoArgs(ToolArgs):
 class TodoService:
     _items: dict[str, dict[str, Any]] = field(default_factory=dict)
     _next: int = field(default=1, init=False)
+    path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.path is not None:
+            self._load()
 
     def add(self, text: str) -> dict[str, Any]:
         item_id = f"t{self._next}"
         self._next += 1
         item = {"id": item_id, "text": text.strip(), "done": False}
         self._items[item_id] = item
+        self._save()
         return item
 
     def list_items(self) -> list[dict[str, Any]]:
@@ -79,7 +94,46 @@ class TodoService:
             item["done"] = True
         else:
             del self._items[item_id]
+        self._save()
         return item
+
+    # -- persistence -------------------------------------------------------
+    #
+    # Saving on every mutation rather than on shutdown is the choice that makes
+    # a crash survivable: a killed process never runs a shutdown hook, and the
+    # state a user typed in is exactly what they would miss.
+
+    def _save(self) -> None:
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"items": list(self._items.values()), "next": self._next}
+        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _load(self) -> None:
+        assert self.path is not None
+        if not self.path.is_file():
+            return
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            # A corrupt file should not brick startup; it is reported by being
+            # ignored, and the next write replaces it with known-good state.
+            return
+        raw_items = payload.get("items", payload if isinstance(payload, list) else [])
+        if not isinstance(raw_items, list):
+            return
+        for item in raw_items:
+            if isinstance(item, dict) and item.get("id"):
+                self._items[str(item["id"])] = item
+        self._next = int(payload.get("next") or self._next_from_items())
+
+    def _next_from_items(self) -> int:
+        highest = 0
+        for item_id in self._items:
+            digits = "".join(ch for ch in str(item_id) if ch.isdigit())
+            highest = max(highest, int(digits) if digits else 0)
+        return highest + 1
 
 
 def register(registry: ToolRegistry, service: TodoService | None = None) -> TodoService:

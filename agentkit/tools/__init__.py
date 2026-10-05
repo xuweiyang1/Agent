@@ -33,6 +33,8 @@ def build_registry(
     with_fx: bool = True,
     with_chart: bool = True,
     chart_output_dir: str | None = None,
+    todo_service: "todo.TodoService | None" = None,
+    calendar_service: "calendar.CalendarService | None" = None,
 ) -> ToolRegistry:
     """Assemble a registry, optionally with a subset of the tools.
 
@@ -46,9 +48,9 @@ def build_registry(
     if with_fx:
         fx.register(registry)
     if with_todos:
-        todo.register(registry)
+        todo.register(registry, todo_service)
     if with_calendar:
-        calendar.register(registry)
+        calendar.register(registry, calendar_service)
     if with_search:
         search.register(registry, search.SearchService(corpus=dict(search_corpus or search.DEFAULT_CORPUS)))
     if with_chart:
