@@ -16,9 +16,43 @@ baseline: the model is scripted or heuristic, the index is BM25, and network
 transports have record/replay doubles. A real model is called only when a
 number is being produced for the record.
 
-Progress and what is next: `docs/ROADMAP.md`. Working agreement:
-`docs/WORKFLOW.md`. Instructions for an agent picking this up:
-`AGENTS.md`.
+## Getting started
+
+Requires Python 3.10 or newer.
+
+```powershell
+git clone https://github.com/xuweiyang1/Agent.git
+cd Agent
+python -m pip install -r requirements.txt
+
+# does it work? this is the whole check -- no key, no network, no cost
+python -m unittest discover -s tests -t .
+```
+
+That command should print `OK` with 244 tests. If it does, everything below is
+reproducible on your machine; if it does not, the failure is a real signal
+about the environment rather than a flaky test.
+
+Then run whichever week you care about:
+
+```powershell
+python demo.py                      # W1: the loop, with a trace
+python scripts\demo_w2.py           # W2: tool calling, all three failure modes
+python scripts\demo_w3.py           # W3: sandbox escapes, MCP, charts
+python scripts\rag_baseline.py       # W3.5: the retrieval baseline numbers
+```
+
+None of these need an API key. `agentloop/` needs no third-party packages at
+all, so if you only want W1 you can skip the install.
+
+### Where to look next
+
+| If you want | Read |
+| --- | --- |
+| what the project is and where it is going | `docs/ROADMAP.md` |
+| the rules for working on it across two machines | `docs/WORKFLOW.md` |
+| a machine-readable brief for an AI agent picking this up | `AGENTS.md` |
+| the decisions behind the code | the module docstrings |
 
 ## Why it exists
 
@@ -39,8 +73,8 @@ non-obvious decision is explained in a docstring at the point it matters.
 ## Run it
 
 ```powershell
-py demo.py
-py -m unittest discover -s tests -t . -v
+python demo.py
+python -m unittest discover -s tests -t . -v
 ```
 
 `demo.py` needs no API key. It runs a scripted model and prints a trace of
@@ -91,7 +125,7 @@ Qwen, and most self-hosted gateways, because they all speak the same
 
 ```powershell
 $env:DEEPSEEK_API_KEY = "sk-..."
-py scripts\smoke_live.py
+python scripts\smoke_live.py
 ```
 
 `smoke_live.py` runs three questions and prints what was actually measured:
@@ -101,7 +135,7 @@ impressions, are what belongs on a resume line.
 Point it at another endpoint without touching code:
 
 ```powershell
-py scripts\smoke_live.py --base-url https://api.moonshot.cn/v1 --model kimi-k2
+python scripts\smoke_live.py --base-url https://api.moonshot.cn/v1 --model kimi-k2
 ```
 
 ### Record and replay
@@ -111,7 +145,7 @@ it. `--record` saves every request and response, and `ReplayTransport` serves
 those back with no network access, which is why the test suite runs offline:
 
 ```powershell
-py scripts\smoke_live.py --record tests\fixtures\my_run.json
+python scripts\smoke_live.py --record tests\fixtures\my_run.json
 ```
 
 Replay matches by position rather than by request hash. A hash would quietly
@@ -143,13 +177,13 @@ passes is worse than no benchmark.
 
 ```powershell
 # one live pass that also saves the exchanges for later replay
-py scripts\eval.py --record eval\baseline.json --report eval\report-v1.json
+python scripts\eval.py --record eval\baseline.json --report eval\report-v1.json
 
 # re-grade offline, no key and no cost, as often as you like
-py scripts\eval.py --report eval\report-v2.json
+python scripts\eval.py --report eval\report-v2.json
 
 # what changed between two runs
-py scripts\eval.py --compare eval\report-v1.json eval\report-v2.json
+python scripts\eval.py --compare eval\report-v1.json eval\report-v2.json
 ```
 
 ### Two token numbers, both real
@@ -387,5 +421,12 @@ characters); inline bytes are opt-in. The demo prints both numbers.
 
 ## Requirements
 
-Python 3.10+. Standard library only. `from __future__ import annotations`
-is used throughout, so the type hints are inert at runtime.
+Python 3.10 or newer. Dependencies go in with
+`python -m pip install -r requirements.txt`. The one version constraint worth
+stating: the MCP SDK must be 2.x, where `FastMCP` is spelled `MCPServer` (see
+`mcp_server/adapter.py` for how that rename is absorbed).
+
+`agentloop/` is the exception -- deliberately standard-library only, so the W1
+loop stays readable and its tests need no install step.
+`from __future__ import annotations` is used throughout, so the type hints are
+inert at runtime.
