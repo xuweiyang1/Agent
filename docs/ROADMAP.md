@@ -84,7 +84,7 @@ Agent loop：retry/backoff、context compaction、tool dispatch、13 题评测�
 - **验收**：中途中断能从 checkpoint 恢复。
 - **面试锚点**：checkpoint 的价值是恢复、人工审批、human-in-the-loop。
 
-### W5 三层记忆
+### W5 三层记忆（已完成）
 - **目标**：工作记忆（当轮 scratchpad）、会话记忆、长期记忆
   （向量存语义 + 结构化表存偏好/历史决策）。
 - **交付**：`memory/`（`working.py` / `session.py` / `longterm.py` / `store.py`）。
@@ -92,7 +92,7 @@ Agent loop：retry/backoff、context compaction、tool dispatch、13 题评测�
 - **面试锚点**：直接答"会话很长 Prompt 爆了怎么办"——分层 + 摘要 +
   检索式记忆 + 滑窗，而不是硬塞。
 
-### W6 Agentic RAG
+### W6 Agentic RAG（下一步）
 - **目标**：不做固定管道。把 `retrieve` 封成**工具**，agent 自己决定何时检索、
   检索几次、结果不够怎么换 query。
 - **交付**：`retrieve` 工具 + 与 W3.5 基线的对比报告。
@@ -212,6 +212,11 @@ tests/               # 离线测试
 - W4 已完成（`graph/`）：LangGraph StateGraph（node / edge / 条件分支 / checkpoint）、
   复用 W2 工具的薄节点层、纯函数决策层（`plan.py`）、静态断点式人工审批 +
   `InMemorySaver` 恢复。26 项新测试，全量 271 项离线通过。入口 `python scripts/demo_w4.py`。
+
+- W5 已完成（`memory/`）：工作记忆（token 预算 + 显式淘汰）、会话记忆（滑窗 + 滚动摘要 +
+  被淘汰轮次的检索）、长期记忆（结构化偏好/决策 + 语义召回，JSON 持久化）。
+  会话记忆由 `session_from_checkpoint` 直接水合自 W4 的 checkpoint，不另存一份历史。
+  30 项新测试，全量 301 项离线通过。入口 `python scripts/demo_w5.py`。
 
 ## 10. 风险与取舍
 

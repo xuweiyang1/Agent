@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 271 tests. If it does, everything below is
+That command should print `OK` with 301 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -41,6 +41,7 @@ python scripts\demo_w2.py           # W2: tool calling, all three failure modes
 python scripts\demo_w3.py           # W3: sandbox escapes, MCP, charts
 python scripts\rag_baseline.py       # W3.5: the retrieval baseline numbers
 python scripts\demo_w4.py            # W4: the planner, its branches and its checkpoint
+python scripts\demo_w5.py            # W5: three memory layers, across a restart
 python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 
@@ -409,6 +410,79 @@ back through the transcript as text, and a PNG as a data URL is roughly a
 hundred thousand characters -- which would undo every token saving in
 `messages.py`. So the default result is a path and a digest (under 500
 characters); inline bytes are opt-in. The demo prints both numbers.
+
+## W5: three kinds of memory (`memory`)
+
+Each layer exists because it loses a different thing if you try to do its job
+with one of the others. A single store cannot be bounded and complete at once,
+which is the whole problem.
+
+```powershell
+python scripts\demo_w5.py
+python -m unittest tests.test_memory -v
+```
+
+| File | Responsibility |
+| --- | --- |
+| `memory/working.py` | the per-turn scratchpad: bounded by tokens, eviction counted |
+| `memory/session.py` | window + rolling summary + recall, and the W4 checkpoint bridge |
+| `memory/longterm.py` | structured preferences/decisions, plus semantic recall |
+| `memory/store.py` | record type, the JSON and in-memory stores, the semantic store |
+
+### The question this week answers
+
+**"The conversation is long and the prompt blew up. Now what?"**
+
+Not "a bigger context window". The answer is three mechanisms over one
+transcript, because they lose different things:
+
+- **A verbatim window** keeps the last turns untouched. Nothing is gained by
+  summarising the thing the user just said.
+- **A rolling summary** holds the shape of everything older, and stays bounded
+  because it summarises its own previous summary rather than the whole history
+  again. Measured, not asserted: the demo prints a compression ratio of ~0.32.
+- **Recall over the evicted turns** is the part naive compaction skips. A
+  summary is lossy on purpose, so the fix for the loss is not a better summary
+  -- it is being able to get the original back. "What exactly did I say about
+  option 2" searches the turns the window dropped.
+
+Eviction does not depend on summarisation. Without a summariser the window is
+all the prompt holds and recall still reaches everything older -- the
+configuration where recall is the *only* way to recover a detail is the last
+place it should silently disappear.
+
+### Two stores for long-term memory, not one
+
+- **Preferences and decisions are structured.** `preference("seat")` returns
+  `"aisle"` or nothing, and never a 90%-match. A preference that is nearly
+  right is a bug that gets blamed on the model.
+- **Everything else is semantic.** "Which plan did I reject" is a sentence,
+  not a field, and is only findable by meaning.
+
+Setting a preference twice replaces it, and the replacement is removed from
+*both* stores -- otherwise `recall` returns a value that exact lookup has
+already retired. That failure is a test, not a comment.
+
+Persistence is demonstrated the only way that counts: a new object over the
+same file reads the preference back. An in-memory dict would prove nothing, so
+the file store is the demo default and the in-memory one is the test double --
+the reverse of the usual arrangement, and for a stated reason.
+
+### Session memory is the W4 checkpoint, not a copy of it
+
+`session_from_checkpoint` hydrates the session layer from a real planner run's
+state history. Keeping a second list of turns alongside the graph would create
+two histories that disagree the moment a run is resumed, because the
+checkpoint is what actually survives a pause. Only the tail of the history is
+hydrated, for the same reason the window exists.
+
+### W5 numbers
+
+- 30 tests added, 301 total, offline, no key
+- session: 24 turns -> 4 verbatim, ~190 tokens summarised to ~60 (0.32)
+- working: 6 results in, 4 kept, 2 evicted, 914 of 1200 tokens held
+- a planner run's 8 notes hydrate into session memory and stay recallable
+- a preference written in one object is read back by another over the same file
 
 ## W4: a planner that branches on what it finds (`graph`)
 
