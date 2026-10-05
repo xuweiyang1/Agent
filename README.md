@@ -9,7 +9,7 @@ the test suite can reproduce offline.
 | `agentloop/` | a minimal agent loop in pure stdlib: model call, tool dispatch, retry with backoff, context compaction | `python demo.py` |
 | `agentkit/` | the loop as a service: Pydantic tool schemas, five tools, an error taxonomy, async dispatch, FastAPI, messages that carry images | `python scripts/demo_w2.py` |
 | `mcp_server/` | a filesystem MCP server with a real path sandbox, plus its cloud-function entry point | `python scripts/demo_w3.py` |
-| `retrieval/` | chunking, BM25 behind a `VectorStore` protocol, and the naive RAG baseline W6 is measured against | `python scripts/rag_baseline.py` |
+| `retrieval/` | chunking, BM25 and a dense store behind one `VectorStore` protocol, rank fusion, and the RAG baselines W6 is measured against | `python scripts/rag_baseline.py` |
 
 **Everything runs offline.** No API key is needed for any test, demo, or
 baseline: the model is scripted or heuristic, the index is BM25, and network
@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 390 tests. If it does, everything below is
+That command should print `OK` with 415 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -43,6 +43,7 @@ python scripts\rag_baseline.py       # W3.5: the retrieval baseline numbers
 python scripts\demo_w4.py            # W4: the planner, its branches and its checkpoint
 python scripts\demo_w5.py            # W5: three memory layers, across a restart
 python scripts\rag_compare.py       # W6: naive vs agentic retrieval, side by side
+python scripts\rag_vector_compare.py # the store swap: BM25 vs dense vs hybrid
 python scripts\rag_agents.py        # W7: single vs multi-agent, and the break-even
 python scripts\demo_chain.py        # the whole chain: image -> todos -> calendar
 python scripts\check_docs.py         # docs drift check: docs vs code

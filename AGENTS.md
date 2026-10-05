@@ -36,13 +36,14 @@ Test-Path mcp_server            # True = 做了
 | W6 Agentic RAG | ✅ | `retrieval/`（`tools.py` + `agentic.py` + `compare.py`） | `python scripts/rag_compare.py` |
 | W7 多 Agent 对比实验 | ✅ | `agents/` | `python scripts/rag_agents.py` |
 | 全链路串联（7 周合流） | ✅ | `assistant/` | `python scripts/demo_chain.py` |
+| VectorStore 换库（dense + hybrid） | ✅ | `retrieval/vector_store.py` | `python scripts/rag_vector_compare.py` |
 
 完整计划见 `docs/ROADMAP.md`，协作纪律见 `docs/WORKFLOW.md`。
 
 ## 怎么验证这一步真的做完了
 
 ```powershell
-python -m unittest discover -s tests -t .      # 应该 390 项全过
+python -m unittest discover -s tests -t .      # 应该 415 项全过
 python scripts\rag_baseline.py                 # W3.5 基线数字，应该能复现
 python scripts\check_docs.py                   # 文档与代码是否漂移
 python scripts\demo_w4.py                      # W4 规划 Agent，看分支与 checkpoint

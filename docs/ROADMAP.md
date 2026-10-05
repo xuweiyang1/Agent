@@ -30,7 +30,7 @@
 | 语言 | Python 3.10+ | 本机 3.10.11 |
 | Agent 编排 | LangGraph | StateGraph / Node / Edge / 条件分支 / checkpoint |
 | 工具协议 | MCP | 本机 `mcp 2.2.0`，`FastMCP` 已改名 `MCPServer` |
-| 向量库 | ChromaDB 起步 -> Milvus | 从第一天就写 `VectorStore` 接口，换库只改适配器 |
+| 向量库 | 已落地 DenseIndex/HashingEmbedder + Hybrid(RRF) -> ChromaDB/Milvus | 同一 `VectorStore` 协议，Chroma 适配器是可选依赖；对比见 `scripts/rag_vector_compare.py` |
 | 服务 | FastAPI + uvicorn | 异步接口 |
 | 部署 | Docker + 云函数 | 云函数用 ASGI 入口 |
 | 模型 | OpenAI 兼容 | 复用 W1 的 `openai_compat` + `ReplayTransport` |
@@ -236,6 +236,10 @@ tests/               # 离线测试
   32 项新测试，全量 367 项离线通过。入口 `python scripts/rag_agents.py`。
 
 ## 9.5 全链路串联（已完成）
+
+- 全链路串联已完成（`assistant/`）：真像素读白板（PIL 渲染 + 模板 IoU 匹配）、
+  请求只给意图不给事实、九步串联（感知/记忆/规划/检索/待办/日历/出图/写回/治理）、
+  城市替换在副作用前中断。23 项新测试，全量 390 项离线通过。入口 `python scripts/demo_chain.py`。
 - **目标**：把 7 周串成一条真链——一张图片进去，变成待办和日历事件，
   中途经过记忆，也就是 ROADMAP 开篇那句"一张照片从输入走到记忆、再走到待办"。
 - **交付**：`assistant/`（`ocr.py` 真像素读板 + `chain.py` 九个步骤 + `__init__.py` 编排）、
@@ -252,10 +256,17 @@ tests/               # 离线测试
 - **治理按数字走**：最后一步套用 W7 的规则，单趟够覆盖就跳过复核回路，
   并记下策略与理由，而不是习惯性上团队。
 - 23 项新测试，入口 `python scripts/demo_chain.py`。
-
-- 全链路串联已完成（`assistant/`）：真像素读白板（PIL 渲染 + 模板 IoU 匹配）、
-  请求只给意图不给事实、九步串联（感知/记忆/规划/检索/待办/日历/出图/写回/治理）、
-  城市替换在副作用前中断。23 项新测试，全量 390 项离线通过。入口 `python scripts/demo_chain.py`。
+- VectorStore 换库已完成（`retrieval/vector_store.py` + `chroma_store.py`）：
+  `HashingEmbedder`（字符 2-4 gram，blake2b 哈希，离线且跨进程可复现）+
+  `DenseIndex`（余弦，ties 按 `(doc_id, index)`）+ `HybridIndex`（RRF 融合，
+  按 rank 而非 score，避免调参）。Chroma 适配器 `ChromaIndex` 为可选依赖，
+  缺包时测试 skip 而非红。对比脚本 `scripts/rag_vector_compare.py` 同语料同
+  任务同生成器，只换检索器：
+  本地哈希稠密 hit 0.80 / mrr 0.73，弱于 BM25 的 0.90 / 0.90（`para-02`
+  语义相似度没抓到 observability），hybrid 0.90 / 0.79 打平。
+  结论：词法仍是最强单检索器，稠密的价值要用真嵌入模型才兑现——
+  这正是换库留口的意义。15 项新测试，全量 415 项离线通过。
+  入口 `python scripts/rag_vector_compare.py`。
 
 ## 10. 风险与取舍
 
