@@ -37,6 +37,7 @@ Test-Path mcp_server            # True = 做了
 | W7 多 Agent 对比实验 | ✅ | `agents/` | `python scripts/rag_agents.py` |
 | 全链路串联（7 周合流） | ✅ | `assistant/` | `python scripts/demo_chain.py` |
 | VectorStore 换库（dense + hybrid） | ✅ | `retrieval/vector_store.py` | `python scripts/rag_vector_compare.py` |
+| Docker 打包 | 🟡 文件就位、未本机构建 | `Dockerfile` | `docker build -t fs-mcp .` |
 
 完整计划见 `docs/ROADMAP.md`，协作纪律见 `docs/WORKFLOW.md`。
 

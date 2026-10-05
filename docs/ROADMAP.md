@@ -32,7 +32,7 @@
 | 工具协议 | MCP | 本机 `mcp 2.2.0`，`FastMCP` 已改名 `MCPServer` |
 | 向量库 | 已落地 DenseIndex/HashingEmbedder + Hybrid(RRF) -> ChromaDB/Milvus | 同一 `VectorStore` 协议，Chroma 适配器是可选依赖；对比见 `scripts/rag_vector_compare.py` |
 | 服务 | FastAPI + uvicorn | 异步接口 |
-| 部署 | Docker + 云函数 | 云函数用 ASGI 入口 |
+| 部署 | Docker（Dockerfile 已就位，未本机构建验证）+ 云函数 | 云函数用 ASGI 入口；镜像 `python -m mcp_server.cloud --host 0.0.0.0` |
 | 模型 | OpenAI 兼容 | 复用 W1 的 `openai_compat` + `ReplayTransport` |
 
 ## 3. 横切面（每周都做，别留到最后）
@@ -267,7 +267,11 @@ tests/               # 离线测试
   结论：词法仍是最强单检索器，稠密的价值要用真嵌入模型才兑现——
   这正是换库留口的意义。15 项新测试，全量 415 项离线通过。
   入口 `python scripts/rag_vector_compare.py`。
-
+- Dockerfile 已就位（根目录 `Dockerfile` + `.dockerignore`）：`python:3.10-slim`
+  + `requirements.txt` + `python -m mcp_server.cloud --host 0.0.0.0`。
+  注意 `.dockerignore` 排除 `eval/*.json` 但**不能**排除 `eval/tasks.jsonl`，
+  否则 demo 与脚本读不到任务集。**未在本机构建验证**（本机无 Docker），
+  第一次 `docker build` 才是真正的检查。
 ## 10. 风险与取舍
 
 - **LangGraph API 变动快**：node/edge 写薄，业务逻辑别长在框架里。

@@ -406,6 +406,25 @@ bare crash and the model would have nothing to act on.
 The mounted app's lifespan must also be forwarded, or its session manager
 never starts and every request hangs instead of failing.
 
+### Docker
+
+`Dockerfile` packages that ASGI app: `python:3.10-slim`, the runtime
+requirements, and `python -m mcp_server.cloud --host 0.0.0.0` as the
+command. The non-default host matters -- a container bound to its own
+loopback answers nothing through the port mapping, even though the process
+looks healthy. The cloud host sets `PORT`; the app reads it and defaults to
+8080.
+
+```powershell
+docker build -t fs-mcp .
+docker run -p 8080:8080 fs-mcp
+curl http://localhost:8080/healthz
+```
+
+Not yet verified: Docker is not installed on the machine this was written
+on, so the image has not been built here. The file records the intended
+deployment; treat the first build as the check, not this paragraph.
+
 ### Charts: cheap output, expensive input
 
 The chart tool renders with matplotlib's Agg backend, so no display and no

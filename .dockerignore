@@ -1,0 +1,17 @@
+# Keep the image to source plus runtime deps.
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local reports and scratch output, but NOT eval/tasks.jsonl -- the demos and
+# scripts read the task set at runtime, so excluding all of eval/ breaks them.
+eval/*.json
+eval/reports/
+*.log
