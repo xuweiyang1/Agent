@@ -17,6 +17,12 @@ So the checkable claims are checked, and nothing else:
 3. **That the two progress tables agree.** AGENTS.md and ROADMAP each carry
    one, and two that disagree are worse than either alone, because the reader
    cannot tell which is stale.
+4. **That the Dockerfile can boot.** A deployment file that builds but exits
+   on startup is worse than no file, because the image looks like proof.
+   Checked statically, since Docker need not be installed to read a file:
+   a ``CMD`` must exist, and the filesystem server's required sandbox root
+   must be supplied (``FS_SANDBOX_ROOT`` or a ``--root`` argument), which is
+   the exact omission that made the first build crash-loop.
 
 Historical numbers ("68 tests added, 182 total" under W3) are deliberately not
 checked. They were true when written and are meant to stay put; rewriting them
@@ -128,6 +134,29 @@ def check_entry_points() -> list[str]:
     ]
 
 
+def check_dockerfile_recipe() -> list[str]:
+    """The docker recipe must start the server, not just build it.
+
+    Learned from a real failure: the first Dockerfile built cleanly and died on
+    ``main()`` with "no sandbox root configured", because the server refuses to
+    guess a root and nobody had set one in the image. A check that only asked
+    "does Dockerfile exist" would have passed it.
+    """
+    path = ROOT / "Dockerfile"
+    if not path.exists():
+        return ["Dockerfile: documented deployment file is missing"]
+    text = path.read_text(encoding="utf-8")
+    problems: list[str] = []
+    if "CMD" not in text:
+        problems.append("Dockerfile: no CMD, so the image has nothing to run")
+    if "FS_SANDBOX_ROOT" not in text and "--root" not in text:
+        problems.append(
+            "Dockerfile: no sandbox root (FS_SANDBOX_ROOT or --root); the server "
+            "raises on startup without one"
+        )
+    return problems
+
+
 def check_progress_tables() -> list[str]:
     """The two progress tables must name the same finished weeks."""
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
@@ -163,7 +192,12 @@ def main() -> int:
         print(f"FAIL  {exc}")
         return 1
 
-    problems = check_total_claims(actual) + check_entry_points() + check_progress_tables()
+    problems = (
+        check_total_claims(actual)
+        + check_entry_points()
+        + check_progress_tables()
+        + check_dockerfile_recipe()
+    )
     if problems:
         print(f"FAIL  docs have drifted from the code ({len(problems)} problem(s)):")
         for problem in problems:

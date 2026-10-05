@@ -25,6 +25,13 @@ COPY . .
 # gets harder than it needs to be.
 ENV PYTHONUNBUFFERED=1
 
+# The filesystem server refuses to start without a sandbox root -- it raises
+# instead of defaulting to the whole filesystem, which is the right failure
+# but a confusing one from a container log. /data is created and named here so
+# the image boots; a deployment mounts its own volume over it.
+ENV FS_SANDBOX_ROOT=/data
+RUN mkdir -p /data
+
 # The cloud host sets PORT; cloud.py reads it and defaults to 8080, which is
 # the port this image advertises.
 EXPOSE 8080
