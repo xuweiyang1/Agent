@@ -1,0 +1,285 @@
+{
+  "overall": {
+    "hit_rate": 0.9,
+    "coverage": 0.95,
+    "mrr": 0.9,
+    "answer_accuracy": 0.9231,
+    "prompt_tokens": 4029,
+    "generation_calls": 13
+  },
+  "per_category": [
+    {
+      "category": "lookup",
+      "tasks": 4,
+      "scored": 4,
+      "hit_rate": 1.0,
+      "mrr": 1.0,
+      "coverage": 1.0,
+      "answer_accuracy": 1.0
+    },
+    {
+      "category": "multi_hop",
+      "tasks": 3,
+      "scored": 3,
+      "hit_rate": 0.6667,
+      "mrr": 1.0,
+      "coverage": 0.8333,
+      "answer_accuracy": 0.6667
+    },
+    {
+      "category": "paraphrase",
+      "tasks": 3,
+      "scored": 3,
+      "hit_rate": 1.0,
+      "mrr": 0.6667,
+      "coverage": 1.0,
+      "answer_accuracy": 1.0
+    },
+    {
+      "category": "negative",
+      "tasks": 3,
+      "scored": 0,
+      "hit_rate": 0.0,
+      "mrr": 0.0,
+      "coverage": 0.0,
+      "answer_accuracy": 1.0
+    }
+  ],
+  "per_task": [
+    {
+      "id": "lookup-01",
+      "category": "lookup",
+      "expected_docs": [
+        "tool-registry"
+      ],
+      "expected_rank": 1,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "tool-registry",
+        "agent-loop",
+        "compaction"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 400
+    },
+    {
+      "id": "lookup-02",
+      "category": "lookup",
+      "expected_docs": [
+        "tokenization"
+      ],
+      "expected_rank": 1,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "tokenization",
+        "latency-budget",
+        "prompt-injection"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 395
+    },
+    {
+      "id": "lookup-03",
+      "category": "lookup",
+      "expected_docs": [
+        "prompt-injection"
+      ],
+      "expected_rank": 1,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "prompt-injection",
+        "function-calling",
+        "context-window"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 397
+    },
+    {
+      "id": "lookup-04",
+      "category": "lookup",
+      "expected_docs": [
+        "evaluation"
+      ],
+      "expected_rank": 1,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "evaluation",
+        "observability",
+        "latency-budget"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 315
+    },
+    {
+      "id": "multi-01",
+      "category": "multi_hop",
+      "expected_docs": [
+        "agent-loop",
+        "context-window"
+      ],
+      "expected_rank": 1,
+      "coverage": 0.5,
+      "missing": [
+        "context-window"
+      ],
+      "hit": false,
+      "sources": [
+        "agent-loop",
+        "latency-budget",
+        "compaction"
+      ],
+      "answer_ok": false,
+      "failures": [
+        "missing 'context window'",
+        "missing any of ('budget', 'grow', 'exceed', 'fixed')"
+      ],
+      "prompt_tokens": 393
+    },
+    {
+      "id": "multi-02",
+      "category": "multi_hop",
+      "expected_docs": [
+        "latency-budget"
+      ],
+      "expected_rank": 1,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "latency-budget",
+        "compaction",
+        "observability"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 412
+    },
+    {
+      "id": "multi-03",
+      "category": "multi_hop",
+      "expected_docs": [
+        "backoff"
+      ],
+      "expected_rank": 1,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "backoff",
+        "tool-registry",
+        "observability"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 343
+    },
+    {
+      "id": "para-01",
+      "category": "paraphrase",
+      "expected_docs": [
+        "embedding-retrieval"
+      ],
+      "expected_rank": 1,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "embedding-retrieval",
+        "observability",
+        "prompt-injection"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 402
+    },
+    {
+      "id": "para-02",
+      "category": "paraphrase",
+      "expected_docs": [
+        "observability"
+      ],
+      "expected_rank": 2,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "backoff",
+        "observability",
+        "agent-loop"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 408
+    },
+    {
+      "id": "para-03",
+      "category": "paraphrase",
+      "expected_docs": [
+        "compaction"
+      ],
+      "expected_rank": 2,
+      "coverage": 1.0,
+      "missing": [],
+      "hit": true,
+      "sources": [
+        "agent-loop",
+        "compaction",
+        "embedding-retrieval"
+      ],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 415
+    },
+    {
+      "id": "neg-01",
+      "category": "negative",
+      "expected_docs": [],
+      "expected_rank": null,
+      "coverage": 0.0,
+      "missing": [],
+      "hit": false,
+      "sources": [],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 48
+    },
+    {
+      "id": "neg-02",
+      "category": "negative",
+      "expected_docs": [],
+      "expected_rank": null,
+      "coverage": 0.0,
+      "missing": [],
+      "hit": false,
+      "sources": [],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 53
+    },
+    {
+      "id": "neg-03",
+      "category": "negative",
+      "expected_docs": [],
+      "expected_rank": null,
+      "coverage": 0.0,
+      "missing": [],
+      "hit": false,
+      "sources": [],
+      "answer_ok": true,
+      "failures": [],
+      "prompt_tokens": 48
+    }
+  ]
+}
