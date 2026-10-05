@@ -46,6 +46,16 @@ from .index import ScoredChunk
 DEFAULT_DIM = 512
 DEFAULT_NGRAMS = (2, 3, 4)
 DEFAULT_RRF_K = 60  # the standard reciprocal-rank constant from Cormack et al.
+DEFAULT_ST_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+_ST_MISSING = (
+    "sentence-transformers is not installed. It is an optional dependency: the "
+    "offline default is HashingEmbedder, and a real encoder is only needed to "
+    "produce a dense number that is not a stand-in. Install it with "
+    "`pip install sentence-transformers` where network is available. Note that "
+    "the first call downloads weights, and the model version must be recorded "
+    "with any number it produces or the measurement is not reproducible."
+)
 
 
 class Embedder(Protocol):
@@ -211,6 +221,62 @@ class HybridIndex:
         return scored[:k]
 
 
+def sentence_transformers_available() -> bool:
+    """Whether a real encoder can be imported in this environment."""
+    try:
+        import sentence_transformers  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+class SentenceTransformerEmbedder:
+    """A real, trained encoder -- opt-in, because it downloads weights.
+
+    The counterpart to ``HashingEmbedder`` and the reason the embedder is a
+    seam. Hashing measures the *shape* of the dense-vs-sparse difference here;
+    this one is what decides whether dense actually wins on paraphrase, which
+    is the claim a hashing stand-in cannot settle.
+
+    Two consequences that are easy to forget and expensive to forget: the
+    first call downloads the model, so this is never the default path, and the
+    vectors move when the model version moves -- so a number produced with it
+    is only comparable to another number produced with the same
+    ``model_name``. That is why the name is carried on the instance and
+    reported by the comparison script.
+    """
+
+    def __init__(self, model_name: str = DEFAULT_ST_MODEL, *, device: str | None = None) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:  # pragma: no cover - exercised via skipUnless
+            raise ImportError(_ST_MISSING) from exc
+        self.model_name = model_name
+        self._model = SentenceTransformer(model_name, device=device)
+        self.dim = int(self._model.get_sentence_embedding_dimension())
+
+    def __call__(self, text: str) -> list[float]:
+        # Normalised so cosine is a dot product, matching HashingEmbedder and
+        # keeping the two dense rows on one scale.
+        vector = self._model.encode(text, normalize_embeddings=True)
+        return [float(value) for value in vector]
+
+
+def build_embedder(name: str = "hashing", *, model_name: str | None = None) -> Embedder:
+    """Resolve an embedder by name, so a script can offer a choice.
+
+    ``hashing`` is the offline default and the only one that is always
+    available. ``sentence-transformers`` is opt-in and raises a clear sentence
+    when the package is missing, rather than a bare ImportError from a
+    dependency of a dependency.
+    """
+    if name == "hashing":
+        return HashingEmbedder()
+    if name in ("sentence-transformers", "st", "sentence_transformers"):
+        return SentenceTransformerEmbedder(model_name or DEFAULT_ST_MODEL)
+    raise ValueError(f"unknown embedder {name!r}; expected 'hashing' or 'sentence-transformers'")
+
+
 def build_vector_index(
     chunks: Sequence[Chunk],
     *,
@@ -224,9 +290,13 @@ __all__ = [
     "DEFAULT_DIM",
     "DEFAULT_NGRAMS",
     "DEFAULT_RRF_K",
+    "DEFAULT_ST_MODEL",
     "DenseIndex",
     "Embedder",
     "HashingEmbedder",
+    "SentenceTransformerEmbedder",
     "HybridIndex",
+    "build_embedder",
     "build_vector_index",
+    "sentence_transformers_available",
 ]

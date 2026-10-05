@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 415 tests. If it does, everything below is
+That command should print `OK` with 421 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 

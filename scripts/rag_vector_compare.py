@@ -37,10 +37,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from retrieval.corpus_rag import build_index_for
 from retrieval.naive import ExtractiveGenerator
 from retrieval.report import run_baseline
-from retrieval.vector_store import DenseIndex, HybridIndex
+from retrieval.vector_store import DenseIndex, HybridIndex, build_embedder
 
 
-def _stores(size: int, overlap: int) -> dict:
+def _stores(size: int, overlap: int, embedder_name: str = "hashing", model_name: str | None = None) -> dict:
     """The three retrievers, built over the same chunks.
 
     Built from one chunk list on purpose. A dense store over differently split
@@ -52,7 +52,7 @@ def _stores(size: int, overlap: int) -> dict:
 
     chunks = chunk_corpus(documents(), size=size, overlap=overlap)
     bm25 = build_index_for(size=size, overlap=overlap)
-    dense = DenseIndex(chunks)
+    dense = DenseIndex(chunks, embedder=build_embedder(embedder_name, model_name=model_name))
     return {"bm25": bm25, "dense": dense, "hybrid": HybridIndex([bm25, dense])}
 
 
@@ -62,16 +62,36 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--size", type=int, default=512, help="chunk size in characters")
     parser.add_argument("--overlap", type=int, default=64, help="chunk overlap in characters")
     parser.add_argument("--save", default=None, help="write the report as JSON")
+    parser.add_argument(
+        "--embedder",
+        default="hashing",
+        choices=["hashing", "sentence-transformers"],
+        help="dense embedder; sentence-transformers downloads weights on first run",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="sentence-transformers model name (recorded with the numbers)",
+    )
     options = parser.parse_args(argv)
 
-    stores = _stores(options.size, options.overlap)
+    stores = _stores(options.size, options.overlap, options.embedder, options.model)
     reports = {
         name: run_baseline(index=store, generate=ExtractiveGenerator(), k=options.k)
         for name, store in stores.items()
     }
 
     n_chunks = len(stores["bm25"])
-    print(f"corpus: {n_chunks} chunks, k={options.k}, size={options.size}, overlap={options.overlap}")
+    from retrieval.vector_store import DEFAULT_ST_MODEL
+
+    shown_model = options.model or DEFAULT_ST_MODEL
+    detail = f", embedder={options.embedder}"
+    if options.embedder != "hashing":
+        detail += f" ({shown_model})"
+    print(
+        f"corpus: {n_chunks} chunks, k={options.k}, size={options.size}, "
+        f"overlap={options.overlap}{detail}"
+    )
     print()
     print(f"{'retriever':10} {'hit':>6} {'cov':>6} {'mrr':>6} {'answer':>7}")
     print("-" * 42)
@@ -94,7 +114,16 @@ def main(argv: list[str] | None = None) -> int:
     if options.save:
         target = Path(options.save)
         target.parent.mkdir(parents=True, exist_ok=True)
-        payload = {name: report.to_dict() for name, report in reports.items()}
+        payload = {
+            "meta": {
+                "embedder": options.embedder,
+                "model": (shown_model if options.embedder != "hashing" else "hashing"),
+                "k": options.k,
+                "size": options.size,
+                "overlap": options.overlap,
+            },
+            "reports": {name: report.to_dict() for name, report in reports.items()},
+        }
         target.write_text(
             json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )

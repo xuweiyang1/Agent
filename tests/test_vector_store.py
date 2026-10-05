@@ -27,6 +27,7 @@ from retrieval.vector_store import (
     build_vector_index,
 )
 from retrieval.chroma_store import chroma_available
+from retrieval.vector_store import build_embedder, sentence_transformers_available
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -207,6 +208,57 @@ class InterfaceTests(unittest.TestCase):
             result = tool.retrieve("passport renewal")
             self.assertEqual(result.citations[0].doc_id, "passport")
 
+
+
+
+class ChromaOptionalTests(unittest.TestCase):
+    """Chroma is optional; a missing package must be a skip, not a failure."""
+
+    @unittest.skipUnless(chroma_available(), "chromadb is not installed (optional)")
+    def test_chroma_satisfies_the_protocol_and_ranks_like_the_local_store(self):
+        from retrieval.chroma_store import ChromaIndex
+
+        store = ChromaIndex(CORPUS)
+        for name in ("search", "__len__"):
+            self.assertTrue(hasattr(store, name), f"{name} missing")
+        self.assertEqual(len(store), len(CORPUS))
+        self.assertEqual(store.search("passport renewal")[0].doc_id, "passport")
+
+    def test_a_missing_chroma_raises_one_clear_sentence(self):
+        from retrieval.chroma_store import _MISSING
+
+        if chroma_available():
+            self.skipTest("chromadb is installed; the missing-package path is unreachable")
+        self.assertIn("pip install chromadb", _MISSING)
+
+
+class RealEmbedderTests(unittest.TestCase):
+    """The opt-in encoder, kept skippable so a machine with no network is green."""
+
+    def test_build_embedder_returns_the_offline_default(self):
+        embedder = build_embedder("hashing")
+        self.assertEqual(embedder.dim, 512)
+        self.assertEqual(len(embedder("passport")), 512)
+
+    def test_an_unknown_embedder_name_is_rejected_loudly(self):
+        with self.assertRaises(ValueError):
+            build_embedder("no-such-embedder")
+
+    def test_a_missing_encoder_raises_one_clear_sentence(self):
+        if sentence_transformers_available():
+            self.skipTest("sentence-transformers installed; missing-package path unreachable")
+        from retrieval.vector_store import _ST_MISSING, SentenceTransformerEmbedder
+
+        self.assertIn("pip install sentence-transformers", _ST_MISSING)
+        with self.assertRaises(ImportError):
+            SentenceTransformerEmbedder()
+
+    @unittest.skipUnless(sentence_transformers_available(), "sentence-transformers not installed (optional)")
+    def test_the_real_encoder_ranks_like_a_dense_store(self):
+        from retrieval.vector_store import SentenceTransformerEmbedder
+
+        index = DenseIndex(CORPUS, embedder=SentenceTransformerEmbedder())
+        self.assertEqual(index.search("passport renewal")[0].doc_id, "passport")
 
 if __name__ == "__main__":
     unittest.main()

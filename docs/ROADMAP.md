@@ -267,6 +267,11 @@ tests/               # 离线测试
   结论：词法仍是最强单检索器，稠密的价值要用真嵌入模型才兑现——
   这正是换库留口的意义。15 项新测试，全量 415 项离线通过。
   入口 `python scripts/rag_vector_compare.py`。
+- 可插真嵌入（`retrieval/vector_store.py`）：`SentenceTransformerEmbedder` + `build_embedder(name)`
+  作为可选依赖接入，缺包时给一句明确提示、测试 skip 而非红；`rag_vector_compare.py`
+  加 `--embedder sentence-transformers --model <name>`，并把嵌入器与模型名写进
+  `eval/rag-vector-store.json` 的 meta，保证数字可归因、可复现。
+  6 项新测试，全量 421 项离线通过。
 - Dockerfile 已就位并**实测构建运行通过**（根目录 `Dockerfile` + `.dockerignore`）：
   `python:3.10-slim` + `requirements.txt` + `python -m mcp_server.cloud --host 0.0.0.0`。
   `healthz` 返回 `{"ok": true, "rooted": "data"}`。第一次构建能过、容器却
