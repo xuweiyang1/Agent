@@ -1,4 +1,4 @@
-﻿"""Error taxonomy for tool dispatch.
+"""Error taxonomy for tool dispatch.
 
 The W1 runtime turned a tool failure into the string ``"error: ..."`` and
 moved on. That was enough to keep a run alive, but it threw away the one
@@ -14,8 +14,16 @@ model to read; the kind is written for the code to branch on.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
+
+# Python 3.10 has two distinct TimeoutError classes: the builtin one and
+# ``asyncio.TimeoutError``. They are not the same type and neither subclasses
+# the other, so a bare ``except TimeoutError`` misses every await timeout.
+# Checking both is the difference between "timeouts are handled" and
+# "timeouts are handled on the path we happened to test".
+_TIMEOUT_TYPES: tuple[type[BaseException], ...] = (TimeoutError, asyncio.TimeoutError)
 
 
 class ErrorKind(str, Enum):
@@ -116,14 +124,14 @@ def classify(exc: BaseException, *, tool: str = "") -> ToolFailure:
     """Map an arbitrary exception onto the taxonomy.
 
     Dispatch never lets a raw exception reach the transcript. The mapping is
-    the contract: a ``TimeoutError`` becomes ``TIMEOUT`` (retryable, not the
-    model's fault), a ``ToolCallError`` keeps its own kind, and everything
-    else is ``INTERNAL`` so it is visibly our bug rather than silently
-    reported as the model's.
+    the contract: a timeout becomes ``TIMEOUT`` (retryable, not the model's
+    fault), a ``ToolCallError`` keeps its own kind, and everything else is
+    ``INTERNAL`` so it is visibly our bug rather than silently reported as
+    the model's.
     """
     if isinstance(exc, ToolCallError):
         return exc.as_failure(tool)
-    if isinstance(exc, TimeoutError):
+    if isinstance(exc, _TIMEOUT_TYPES):
         return ToolFailure(
             ErrorKind.TIMEOUT,
             f"tool {tool!r} exceeded its time budget" if tool else "tool timed out",

@@ -192,7 +192,14 @@ tests/               # 离线测试
 3. **周数**：7 周，W7 做"单 vs 多 Agent"对比实验，不搭大团队。
 4. **出图**：图表级（matplotlib/PIL 离线渲染），不出照片。
 
-## 9. 风险与取舍
+## 9. 进度
+
+- W1 已完成。
+- W2 已完成（`agentkit/`）：Pydantic schema、5 工具、ErrorKind 分类、
+  异步 dispatch 与并发调用、FastAPI 接口、content blocks、图片塌缩。
+  48 项新测试，全量 114 项离线通过。入口 `python scripts/demo_w2.py`。
+
+## 10. 风险与取舍
 
 - **LangGraph API 变动快**：node/edge 写薄，业务逻辑别长在框架里。
 - **MCP 2.x 迁移**：经典 `from mcp.server.fastmcp import FastMCP` 会报错，

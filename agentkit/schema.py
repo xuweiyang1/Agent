@@ -1,4 +1,4 @@
-﻿"""Tool schemas, generated from Pydantic v2 models.
+"""Tool schemas, generated from Pydantic v2 models.
 
 W1 hand-wrote its JSON schemas, and the docstring there argued that was
 deliberate. W2 reverses that on purpose, and the reason is worth stating:
@@ -22,6 +22,30 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .errors import ErrorKind, ToolCallError
 
+# Pydantic v2 reports a machine ``type`` (``string_type``) and a prose ``msg``,
+# but not the JSON type the schema asked for. Mapping the common ones back to
+# JSON Schema vocabulary is what lets the error say "expected string" in the
+# same words the model saw in the tool schema, instead of a synonym.
+_EXPECTED_BY_ERROR: dict[str, str] = {
+    "string_type": "string",
+    "int_type": "integer",
+    "int_parsing": "integer",
+    "float_type": "number",
+    "float_parsing": "number",
+    "bool_type": "boolean",
+    "bool_parsing": "boolean",
+    "list_type": "array",
+    "dict_type": "object",
+    "model_type": "object",
+    "missing": "a value (this field is required)",
+    "extra_forbidden": "no extra keys (this argument does not exist)",
+    "too_short": "at least the minimum length",
+    "too_long": "at most the maximum length",
+    "greater_than": "a value above the minimum",
+    "less_than": "a value below the maximum",
+    "string_pattern_mismatch": "a value matching the allowed pattern",
+}
+
 
 class ToolArgs(BaseModel):
     """Base class for every tool's argument model.
@@ -43,17 +67,23 @@ def _first_error(exc: ValidationError) -> dict[str, Any]:
     to unblock the next attempt, and ``expected`` is what makes the message
     actionable rather than merely negative.
     """
-    first = exc.errors()[0]
+    errors = exc.errors()
+    if not errors:
+        return {"argument": "(root)", "problem": "invalid arguments"}
+    first = errors[0]
     location = ".".join(str(part) for part in first.get("loc", ())) or "(root)"
-    expected = first.get("expected")
     detail: dict[str, Any] = {
         "argument": location,
         "problem": first.get("msg", "invalid"),
     }
+    expected = _EXPECTED_BY_ERROR.get(str(first.get("type", "")))
     if expected:
         detail["expected"] = expected
-    if isinstance(first.get("input"), (str, int, float, bool)):
-        detail["got"] = first["input"]
+    raw_input = first.get("input")
+    if isinstance(raw_input, (str, int, float, bool)):
+        detail["got"] = raw_input
+    if len(errors) > 1:
+        detail["other_errors"] = len(errors) - 1
     return detail
 
 

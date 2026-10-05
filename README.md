@@ -229,6 +229,66 @@ Commit on whichever side you are working, push, and pull on the other. Do
 not mount a shared filesystem and edit from both places, and do not move
 files by hand after the first import.
 
+## W2: a tool-calling service (`agentkit`)
+
+`agentloop` is the loop, built to be read. `agentkit` is the same loop under
+the conditions a service imposes: schemas generated from Pydantic models,
+five real tools, one error taxonomy, an HTTP surface, and messages that can
+carry an image.
+
+```powershell
+python scripts\demo_w2.py          # offline trace of every failure mode
+python -m unittest tests.test_agentkit -v
+```
+
+| File | Responsibility |
+| --- | --- |
+| `agentkit/schema.py` | Pydantic v2 argument models; the model *is* the published contract |
+| `agentkit/registry.py` | name -> schema + callable; sync and async look identical to the model |
+| `agentkit/errors.py` | `ErrorKind` taxonomy and the classifier that maps exceptions onto it |
+| `agentkit/dispatch.py` | validate, run, time out, classify; one call in, one result out |
+| `agentkit/messages.py` | content blocks, wire encoding, image collapsing, token estimate |
+| `agentkit/chat.py` | the async turn loop, plus a deterministic router for offline runs |
+| `agentkit/service.py` | FastAPI app: `/agent/run`, `/tools`, `/tools/{name}` |
+| `agentkit/openai_model.py` | async adapter over W1's record/replay transports |
+
+### The three failures, handled once
+
+- **The model invents a tool name** -> `UNKNOWN_TOOL`. The message lists what
+  is available, so the next attempt can succeed.
+- **The model sends a bad argument** -> `BAD_ARGUMENTS`, with the offending
+  key, the problem, and the expected type. `extra="forbid"` means an invented
+  argument is reported instead of silently dropped.
+- **The tool hangs or fails** -> `TIMEOUT` / `UPSTREAM`, classified, retryable,
+  and returned as data. Never a 500.
+
+A tool failure is a 200 with an error payload; a bad request is a 4xx. The
+first is the model's to fix, the second is the caller's, and conflating them
+is what turns a recoverable mistake into an outage.
+
+### Why dispatch is async
+
+Every tool call in a turn is awaited concurrently, so three independent
+lookups cost one round trip. Sync tools run in a worker thread and everything
+is wrapped in a per-tool budget, which is why a hung tool becomes a
+`timeout` result instead of a hung server. Python 3.10 has two distinct
+`TimeoutError` classes (`builtins` and `asyncio`), and neither subclasses the
+other -- `agentkit/errors.py` checks both, which is the difference between
+handling timeouts and handling the one path that happened to be tested.
+
+### Images cost tokens, so they are collapsed
+
+An image block is roughly a thousand tokens, and a naive multi-turn loop
+resends it every turn. `ChatMessage.collapse_images()` replaces a seen image
+with its caption once it has been answered, so later turns carry the text
+instead of the pixels. The demo prints the saving.
+
+## W2 numbers
+
+- 48 tests added, 114 total, offline, no key
+- image turn: ~1006 tokens -> ~15 after collapsing
+- hung tool: bounded at ~56 ms instead of 400 ms, returned as `timeout`
+
 ## Requirements
 
 Python 3.10+. Standard library only. `from __future__ import annotations`
