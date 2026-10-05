@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 301 tests. If it does, everything below is
+That command should print `OK` with 335 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -42,6 +42,7 @@ python scripts\demo_w3.py           # W3: sandbox escapes, MCP, charts
 python scripts\rag_baseline.py       # W3.5: the retrieval baseline numbers
 python scripts\demo_w4.py            # W4: the planner, its branches and its checkpoint
 python scripts\demo_w5.py            # W5: three memory layers, across a restart
+python scripts\rag_compare.py       # W6: naive vs agentic retrieval, side by side
 python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 
@@ -410,6 +411,81 @@ back through the transcript as text, and a PNG as a data URL is roughly a
 hundred thousand characters -- which would undo every token saving in
 `messages.py`. So the default result is a path and a digest (under 500
 characters); inline bytes are opt-in. The demo prints both numbers.
+
+## W6: retrieval as a decision, not a stage (`retrieval`)
+
+W3.5's pipeline calls retrieval unconditionally, once, before generating.
+Keeping it is the point -- it is the number W6 has to beat. This week turns
+the stage into a **tool** and gives the agent a reason to call it.
+
+```powershell
+python scripts\rag_compare.py
+python scripts\rag_compare.py --show-tasks   # every task, and which stage failed
+python -m unittest tests.test_agentic_rag -v
+```
+
+| File | Responsibility |
+| --- | --- |
+| `retrieval/tools.py` | `retrieve` as a registered W2 tool, with citations and repeat detection |
+| `retrieval/agentic.py` | the policy: decide, judge, expand, repeat |
+| `retrieval/compare.py` | both strategies on one task set, with the cost column |
+
+### The four things a pipeline cannot do
+
+- **Decide whether to retrieve.** The naive pipeline retrieves for "how do I
+  bake sourdough" and relies on a prompt sentence to make the model refuse.
+- **Judge whether the result is good enough.** Accepted-once is a guess.
+- **Rewrite the query, not repeat it.** Asking the same index the same
+  question twice spends two calls to learn one thing.
+- **Retrieve again and combine.** `multi-01` needs the loop entry *and* the
+  window entry.
+
+### Why the loop is not a retry
+
+The W3.5 report named one specific defect: `multi-01` asks why a loop needs
+compaction, and the entry that explains the *context window* was never
+retrieved -- coverage 0.50.
+
+Rephrasing cannot fix it. The question never says "context window", and that
+entry scores **zero** against every phrasing of the question. What finds it is
+the first round's own result: the `compaction` entry is retrieved, and it
+*discusses* the window. So the second query is built from rare terms that
+co-occur with the question's terms inside what came back -- relevance
+feedback, and the reason this had to be a loop rather than a retry.
+
+### Results
+
+```
+strategy   tasks    hit    cov    mrr  answer   retr  tokens
+naive         13   0.90   0.95   0.90    0.92   1.00    3921
+agentic       13   1.00   1.00   0.90    0.92   1.92    4274
+```
+
+Per category, retrieval moved where the baseline was structurally weak:
+`multi_hop` hit 0.67 -> 1.00, coverage 0.83 -> 1.00. `lookup` and
+`paraphrase` held, and the negative questions still abstain.
+
+**The answer column did not move, and the report says why.** Answer accuracy is
+measured with the offline extractive generator, which answers from the single
+best-matching sentence and cannot combine two documents -- and `multi-01` now
+needs exactly that. So each row carries a `bottleneck`: `retrieval` when
+evidence never arrived, `generation` when it did and the answer still failed.
+`multi-01` reads `coverage 0.50 -> 1.00, bottleneck=generation`. Filling in
+that answer would take a real model, which is a paid measurement, so it is not
+claimed here.
+
+The honest summary is: **retrieval fixed, at ~2x the calls and ~9% more
+tokens, and the end-to-end win needs a better generator than the offline one
+to show up.**
+
+### The seams a model would fill
+
+`SufficiencyJudge` and `AgenticRetriever.next_query` are the two injection
+points. The offline versions are explicit rules over stemmed terms so the
+comparison is reproducible for free; swapping in a model would make the same
+report a real measurement rather than a demonstration. `AlwaysSufficient` is
+kept callable because it is the control -- with it, the agentic loop must
+reproduce the baseline exactly, and a test asserts that.
 
 ## W5: three kinds of memory (`memory`)
 

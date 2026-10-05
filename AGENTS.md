@@ -33,19 +33,20 @@ Test-Path mcp_server            # True = 做了
 | W3.5 Naive RAG 基线 | ✅ | `retrieval/` | `python scripts/rag_baseline.py` |
 | W4 LangGraph 规划 Agent | ✅ | `graph/` | `python scripts/demo_w4.py` |
 | W5 三层记忆 | ✅ | `memory/` | `python scripts/demo_w5.py` |
-| W6 Agentic RAG | ⬜ 下一步 | 复用 `retrieval/` + `memory/` | — |
-| W7 多 Agent 对比实验 | ⬜ | `agents/`（未建） | — |
+| W6 Agentic RAG | ✅ | `retrieval/`（`tools.py` + `agentic.py` + `compare.py`） | `python scripts/rag_compare.py` |
+| W7 多 Agent 对比实验 | ⬜ 下一步 | `agents/`（未建） | — |
 
 完整计划见 `docs/ROADMAP.md`，协作纪律见 `docs/WORKFLOW.md`。
 
 ## 怎么验证这一步真的做完了
 
 ```powershell
-python -m unittest discover -s tests -t .      # 应该 301 项全过
+python -m unittest discover -s tests -t .      # 应该 335 项全过
 python scripts\rag_baseline.py                 # W3.5 基线数字，应该能复现
 python scripts\check_docs.py                   # 文档与代码是否漂移
 python scripts\demo_w4.py                      # W4 规划 Agent，看分支与 checkpoint
 python scripts\demo_w5.py                      # W5 三层记忆，看跨会话与 checkpoint 桥接
+python scripts\rag_compare.py                  # W6 naive vs agentic，数字对比
 ```
 
 **测试必须能离线跑通、不需要 API key。** 这是本仓库的硬约束：所有测试用

@@ -92,7 +92,7 @@ Agent loop：retry/backoff、context compaction、tool dispatch、13 题评测�
 - **面试锚点**：直接答"会话很长 Prompt 爆了怎么办"——分层 + 摘要 +
   检索式记忆 + 滑窗，而不是硬塞。
 
-### W6 Agentic RAG（下一步）
+### W6 Agentic RAG（已完成）
 - **目标**：不做固定管道。把 `retrieve` 封成**工具**，agent 自己决定何时检索、
   检索几次、结果不够怎么换 query。
 - **交付**：`retrieve` 工具 + 与 W3.5 基线的对比报告。
@@ -100,7 +100,7 @@ Agent loop：retry/backoff、context compaction、tool dispatch、13 题评测�
 - **面试锚点**：现在考的是"何时检索"，不是"怎么搭"；
   W5 的长期记忆向量库就是 W6 的 retriever，一次建设两处复用。
 
-### W7 多 Agent：只做"单 vs 多"对比实验
+### W7 多 Agent：只做"单 vs 多"对比实验（下一步）
 - **目标**：Researcher / Writer / Reviewer + Supervisor 的**最小**版本，
   用数字证明什么时候该上多 Agent、什么时候是浪费。
 - **交付**：对比报告（token 成本 / 成功率 / 通信开销）。
@@ -217,6 +217,14 @@ tests/               # 离线测试
   被淘汰轮次的检索）、长期记忆（结构化偏好/决策 + 语义召回，JSON 持久化）。
   会话记忆由 `session_from_checkpoint` 直接水合自 W4 的 checkpoint，不另存一份历史。
   30 项新测试，全量 301 项离线通过。入口 `python scripts/demo_w5.py`。
+
+- W6 已完成（`retrieval/tools.py` + `agentic.py` + `compare.py`）：`retrieve` 注册成
+  W2 真工具（schema/超时/错误分类全复用）、检索决策层（是否检索 / 够不够 / 换查询 /
+  多轮累积证据）、相关反馈式查询扩展、naive vs agentic 对比报告（含成本列与 bottleneck 列）。
+  结果：检索命中 0.90 -> 1.00、coverage 0.95 -> 1.00（multi_hop 0.83 -> 1.00），
+  成本检索次数 1.00 -> 1.92、token 3921 -> 4274；答案准确率 0.92 不变，因为离线抽取式
+  生成器无法跨篇组合——`multi-01` 的 coverage 已 0.50 -> 1.00，bottleneck 已从检索转到生成。
+  34 项新测试，全量 335 项离线通过。入口 `python scripts/rag_compare.py`。
 
 ## 10. 风险与取舍
 
