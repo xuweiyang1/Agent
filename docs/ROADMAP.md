@@ -198,6 +198,11 @@ tests/               # 离线测试
 - W2 已完成（`agentkit/`）：Pydantic schema、5 工具、ErrorKind 分类、
   异步 dispatch 与并发调用、FastAPI 接口、content blocks、图片塌缩。
   48 项新测试，全量 114 项离线通过。入口 `python scripts/demo_w2.py`。
+- W3 已完成（`mcp_server/` + `agentkit/tools/chart.py`）：沙箱文件系统
+  （read/write/list/search + 六类穿越攻击全部拦截）、`MCPServer` 的 FastMCP
+  式薄 adapter 与错误翻译、云函数 ASGI 入口（挂载路径与 allowed_hosts 两个
+  必设项）、M2 出图工具。68 项新测试，全量 182 项离线通过。
+  入口 `python scripts/demo_w3.py`。
 
 ## 10. 风险与取舍
 

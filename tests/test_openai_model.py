@@ -75,9 +75,9 @@ class AdapterTests(unittest.TestCase):
         registry = build_registry()
         run(model.acomplete([ChatMessage(role="user", content="hi")], registry.schemas()))
         sent = transport.payloads[0]["tools"]
-        self.assertEqual(len(sent), 5)
         names = {t["function"]["name"] for t in sent}
         self.assertEqual(names, set(registry.names()))
+        self.assertEqual(len(sent), len(registry.names()))
         for entry in sent:
             self.assertEqual(entry["type"], "function")
             self.assertFalse(entry["function"]["parameters"]["additionalProperties"])

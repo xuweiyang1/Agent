@@ -115,8 +115,16 @@ class SchemaTests(unittest.TestCase):
 
 class DispatchTests(unittest.TestCase):
     def test_unknown_tool_lists_what_is_available(self):
-        invoker = ToolInvoker(build_registry(with_todos=False, with_calendar=False, with_fx=False, with_search=False))
-        result = run(invoker.invoke("send_email", {"to": "a@b.c"}))
+        # Disable every optional tool, so "available" has a known content that
+        # does not change when a new tool is added to the default registry.
+        registry = build_registry(
+            with_todos=False,
+            with_calendar=False,
+            with_fx=False,
+            with_search=False,
+            with_chart=False,
+        )
+        result = run(ToolInvoker(registry).invoke("send_email", {"to": "a@b.c"}))
         self.assertFalse(result.ok)
         self.assertEqual(result.failure.kind, ErrorKind.UNKNOWN_TOOL)
         self.assertEqual(result.failure.details["available"], ["weather"])
@@ -321,14 +329,16 @@ class ApiTests(unittest.TestCase):
 
         cls.client = TestClient(create_app())
 
-    def test_health_lists_the_five_tools(self):
+    def test_health_lists_every_registered_tool(self):
+        """Asserted against the registry, not a literal: adding a tool should
+        not require editing this test."""
         body = self.client.get("/healthz").json()
-        self.assertEqual(body["tools"], ["calendar", "convert_currency", "search", "todo", "weather"])
+        self.assertEqual(body["tools"], build_registry().names())
         self.assertTrue(body["ok"])
 
     def test_tools_endpoint_publishes_schemas(self):
         tools = {t["name"] for t in self.client.get("/tools").json()["tools"]}
-        self.assertEqual(tools, {"calendar", "convert_currency", "search", "todo", "weather"})
+        self.assertEqual(tools, set(build_registry().names()))
 
     def test_direct_tool_call_returns_the_value(self):
         body = self.client.post("/tools/convert_currency", json={"arguments": {"amount": 10, "source": "USD", "target": "CNY"}}).json()

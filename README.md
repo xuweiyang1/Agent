@@ -283,6 +283,86 @@ resends it every turn. `ChatMessage.collapse_images()` replaces a seen image
 with its caption once it has been answered, so later turns carry the text
 instead of the pixels. The demo prints the saving.
 
+## W3: a filesystem MCP server, and a chart tool
+
+Two things land in W3, and they are deliberately opposite in cost.
+
+The **MCP server** is a sandbox plus a protocol binding. The sandbox is pure
+logic with no MCP import, so the security boundary is tested directly rather
+than through a server. The **chart tool** is output multimodality, and it
+changes nothing structural: it is a tool like the other six.
+
+```powershell
+python scripts\demo_w3.py
+python -m unittest tests.test_mcp_fs tests.test_chart tests.test_cloud -v
+```
+
+| File | Responsibility |
+| --- | --- |
+| `mcp_server/fs.py` | the sandbox: resolve, read, write, list, search -- no MCP dependency |
+| `mcp_server/adapter.py` | `MCPServer` under the `FastMCP` name, plus error translation |
+| `mcp_server/server.py` | four MCP tools bound to one sandbox |
+| `mcp_server/cloud.py` | one ASGI app: FastAPI + the mounted MCP transport |
+| `agentkit/tools/chart.py` | M2: render a chart to a PNG file |
+
+### The sandbox is the point
+
+A model supplies a path. Joining it to a root naively lets `../../etc/passwd`
+walk out, and a `startswith` check is defeated by a symlink planted inside the
+root. The defense is order: **resolve first, then compare** -- which
+normalizes `..` and follows symlinks in one step. Checking before resolving is
+the same as not checking.
+
+Refused, and each has a test: relative climb, Windows-style climb, absolute
+POSIX path, absolute Windows path, null byte, and a symlink pointing out of
+the root. The last one is the only case a string-prefix check passes.
+
+A refusal is `bad_arguments` naming the root, because the caller is a model
+that should correct itself, not a crash that should propagate. The known
+limitation is stated in the module rather than hidden: resolve-then-open is a
+time-of-check/time-of-use window, and closing it needs `O_NOFOLLOW`/`openat`.
+
+### MCP 2.x, and the bug the adapter exists for
+
+`pip install mcp` is now 2.x, where `FastMCP` was renamed `MCPServer` and
+`from mcp.server.fastmcp import FastMCP` fails outright. `adapter.py` keeps the
+familiar spelling over the new class.
+
+The non-obvious half: the SDK distinguishes an *anticipated* failure from a
+crash. Raising its own `ToolError` returns `is_error=True` with your message;
+raising anything else yields only `Error executing tool <name>` and sends the
+traceback to the log. Our tools raise `ToolCallError` carrying the classified
+sandbox message -- without translation, every one of those would arrive as a
+bare crash and the model would have nothing to act on.
+
+### Deployment: two settings that are not optional
+
+- **Mount the inner route at `/`.** The SDK registers its handler *inside* the
+  app it returns, so mounting that app at `/mcp` serves `/mcp/mcp`. The mount
+  prefix has to supply the whole path.
+- **Pass `allowed_hosts`.** The SDK defaults to DNS-rebinding protection
+  against localhost only, which is right for a laptop and wrong behind a cloud
+  function: the platform routes by service hostname, so the default rejects
+  every real request with a 421.
+
+The mounted app's lifespan must also be forwarded, or its session manager
+never starts and every request hangs instead of failing.
+
+### Charts: cheap output, expensive input
+
+The chart tool renders with matplotlib's Agg backend, so no display and no
+font server are needed. The trap it is built around: a tool result travels
+back through the transcript as text, and a PNG as a data URL is roughly a
+hundred thousand characters -- which would undo every token saving in
+`messages.py`. So the default result is a path and a digest (under 500
+characters); inline bytes are opt-in. The demo prints both numbers.
+
+## W3 numbers
+
+- 68 tests added, 182 total, offline, no key
+- chart result: ~250 characters in the transcript instead of ~12 KB of base64
+- six escape techniques refused, each with a test
+
 ## W2 numbers
 
 - 48 tests added, 114 total, offline, no key

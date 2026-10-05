@@ -7,12 +7,15 @@ without reaching into private attributes.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from ..registry import Tool, ToolRegistry
-from . import calendar, fx, search, todo, weather
+from . import calendar, chart, fx, search, todo, weather
 
 __all__ = [
     "build_registry",
     "calendar",
+    "chart",
     "fx",
     "search",
     "todo",
@@ -28,6 +31,8 @@ def build_registry(
     with_search: bool = True,
     with_weather: bool = True,
     with_fx: bool = True,
+    with_chart: bool = True,
+    chart_output_dir: str | None = None,
 ) -> ToolRegistry:
     """Assemble a registry, optionally with a subset of the tools.
 
@@ -46,4 +51,7 @@ def build_registry(
         calendar.register(registry)
     if with_search:
         search.register(registry, search.SearchService(corpus=dict(search_corpus or search.DEFAULT_CORPUS)))
+    if with_chart:
+        output_dir = Path(chart_output_dir) if chart_output_dir else None
+        chart.register(registry, chart.ChartService(output_dir=output_dir))
     return registry
