@@ -253,7 +253,13 @@ class SentenceTransformerEmbedder:
             raise ImportError(_ST_MISSING) from exc
         self.model_name = model_name
         self._model = SentenceTransformer(model_name, device=device)
-        self.dim = int(self._model.get_sentence_embedding_dimension())
+        # Renamed across sentence-transformers versions: the old name warns
+        # and the new one may not exist on an older pin, so try both rather
+        # than hard-code a version the installer did not pick.
+        get_dim = getattr(self._model, "get_embedding_dimension", None) or (
+            self._model.get_sentence_embedding_dimension
+        )
+        self.dim = int(get_dim())
 
     def __call__(self, text: str) -> list[float]:
         # Normalised so cosine is a dot product, matching HashingEmbedder and

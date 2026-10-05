@@ -272,6 +272,15 @@ tests/               # 离线测试
   加 `--embedder sentence-transformers --model <name>`，并把嵌入器与模型名写进
   `eval/rag-vector-store.json` 的 meta，保证数字可归因、可复现。
   6 项新测试，全量 421 项离线通过。
+- 真嵌入下的对比数字（`sentence-transformers/all-MiniLM-L6-v2`，
+  384 维，记录在 `eval/rag-vector-store-st.json` 的 meta）：
+  bm25 hit 0.90 / cov 0.95 / mrr 0.90 / answer 0.92；
+  dense **0.90 / 0.95 / 0.95 / 0.92**；hybrid 0.90 / 0.95 / 0.95 / 0.92。
+  关键变化：dense 的 MRR 从哈希版 0.73 升到 **0.95**，`para-02` 由失败转通过，
+  multi_hop MRR 0.67 -> 1.00。也就是说——**瓶颈确实是嵌入器，不是稠密检索本身**；
+  但在这个 12 chunk 的语料上，真嵌入的 dense 是**追平** BM25 而非超过，
+  两者已无法区分。要看出稠密的真优势，得先扩语料。
+  这是诚实的结论：哈希版「稠密输」、真嵌入版「稠密打平」，数值都留档可复现。
 - Dockerfile 已就位并**实测构建运行通过**（根目录 `Dockerfile` + `.dockerignore`）：
   `python:3.10-slim` + `requirements.txt` + `python -m mcp_server.cloud --host 0.0.0.0`。
   `healthz` 返回 `{"ok": true, "rooted": "data"}`。第一次构建能过、容器却
