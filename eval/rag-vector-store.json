@@ -1,0 +1,893 @@
+{
+  "meta": {
+    "embedder": "hashing",
+    "model": "hashing",
+    "k": 5,
+    "size": 512,
+    "overlap": 64
+  },
+  "reports": {
+    "bm25": {
+      "overall": {
+        "hit_rate": 0.9,
+        "coverage": 0.95,
+        "mrr": 0.9,
+        "answer_accuracy": 0.9231,
+        "prompt_tokens": 4029,
+        "generation_calls": 13
+      },
+      "per_category": [
+        {
+          "category": "lookup",
+          "tasks": 4,
+          "scored": 4,
+          "hit_rate": 1.0,
+          "mrr": 1.0,
+          "coverage": 1.0,
+          "answer_accuracy": 1.0
+        },
+        {
+          "category": "multi_hop",
+          "tasks": 3,
+          "scored": 3,
+          "hit_rate": 0.6667,
+          "mrr": 1.0,
+          "coverage": 0.8333,
+          "answer_accuracy": 0.6667
+        },
+        {
+          "category": "paraphrase",
+          "tasks": 3,
+          "scored": 3,
+          "hit_rate": 1.0,
+          "mrr": 0.6667,
+          "coverage": 1.0,
+          "answer_accuracy": 1.0
+        },
+        {
+          "category": "negative",
+          "tasks": 3,
+          "scored": 0,
+          "hit_rate": 0.0,
+          "mrr": 0.0,
+          "coverage": 0.0,
+          "answer_accuracy": 1.0
+        }
+      ],
+      "per_task": [
+        {
+          "id": "lookup-01",
+          "category": "lookup",
+          "expected_docs": [
+            "tool-registry"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "tool-registry",
+            "agent-loop",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 400
+        },
+        {
+          "id": "lookup-02",
+          "category": "lookup",
+          "expected_docs": [
+            "tokenization"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "tokenization",
+            "latency-budget",
+            "prompt-injection"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 395
+        },
+        {
+          "id": "lookup-03",
+          "category": "lookup",
+          "expected_docs": [
+            "prompt-injection"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "prompt-injection",
+            "function-calling",
+            "context-window"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 397
+        },
+        {
+          "id": "lookup-04",
+          "category": "lookup",
+          "expected_docs": [
+            "evaluation"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "evaluation",
+            "observability",
+            "latency-budget"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 315
+        },
+        {
+          "id": "multi-01",
+          "category": "multi_hop",
+          "expected_docs": [
+            "agent-loop",
+            "context-window"
+          ],
+          "expected_rank": 1,
+          "coverage": 0.5,
+          "missing": [
+            "context-window"
+          ],
+          "hit": false,
+          "sources": [
+            "agent-loop",
+            "latency-budget",
+            "compaction"
+          ],
+          "answer_ok": false,
+          "failures": [
+            "missing 'context window'",
+            "missing any of ('budget', 'grow', 'exceed', 'fixed')"
+          ],
+          "prompt_tokens": 393
+        },
+        {
+          "id": "multi-02",
+          "category": "multi_hop",
+          "expected_docs": [
+            "latency-budget"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "latency-budget",
+            "compaction",
+            "observability"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 412
+        },
+        {
+          "id": "multi-03",
+          "category": "multi_hop",
+          "expected_docs": [
+            "backoff"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "backoff",
+            "tool-registry",
+            "observability"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 343
+        },
+        {
+          "id": "para-01",
+          "category": "paraphrase",
+          "expected_docs": [
+            "embedding-retrieval"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "embedding-retrieval",
+            "observability",
+            "prompt-injection"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 402
+        },
+        {
+          "id": "para-02",
+          "category": "paraphrase",
+          "expected_docs": [
+            "observability"
+          ],
+          "expected_rank": 2,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "backoff",
+            "observability",
+            "agent-loop"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 408
+        },
+        {
+          "id": "para-03",
+          "category": "paraphrase",
+          "expected_docs": [
+            "compaction"
+          ],
+          "expected_rank": 2,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "agent-loop",
+            "compaction",
+            "embedding-retrieval"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 415
+        },
+        {
+          "id": "neg-01",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 48
+        },
+        {
+          "id": "neg-02",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 53
+        },
+        {
+          "id": "neg-03",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 48
+        }
+      ]
+    },
+    "dense": {
+      "overall": {
+        "hit_rate": 0.8,
+        "coverage": 0.8,
+        "mrr": 0.7333,
+        "answer_accuracy": 0.8462,
+        "prompt_tokens": 5132,
+        "generation_calls": 13
+      },
+      "per_category": [
+        {
+          "category": "lookup",
+          "tasks": 4,
+          "scored": 4,
+          "hit_rate": 1.0,
+          "mrr": 1.0,
+          "coverage": 1.0,
+          "answer_accuracy": 1.0
+        },
+        {
+          "category": "multi_hop",
+          "tasks": 3,
+          "scored": 3,
+          "hit_rate": 0.6667,
+          "mrr": 0.6667,
+          "coverage": 0.6667,
+          "answer_accuracy": 0.6667
+        },
+        {
+          "category": "paraphrase",
+          "tasks": 3,
+          "scored": 3,
+          "hit_rate": 0.6667,
+          "mrr": 0.4444,
+          "coverage": 0.6667,
+          "answer_accuracy": 0.6667
+        },
+        {
+          "category": "negative",
+          "tasks": 3,
+          "scored": 0,
+          "hit_rate": 0.0,
+          "mrr": 0.0,
+          "coverage": 0.0,
+          "answer_accuracy": 1.0
+        }
+      ],
+      "per_task": [
+        {
+          "id": "lookup-01",
+          "category": "lookup",
+          "expected_docs": [
+            "tool-registry"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "tool-registry",
+            "agent-loop",
+            "observability"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 403
+        },
+        {
+          "id": "lookup-02",
+          "category": "lookup",
+          "expected_docs": [
+            "tokenization"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "tokenization",
+            "latency-budget",
+            "prompt-injection"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 380
+        },
+        {
+          "id": "lookup-03",
+          "category": "lookup",
+          "expected_docs": [
+            "prompt-injection"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "prompt-injection",
+            "tool-registry",
+            "context-window"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 393
+        },
+        {
+          "id": "lookup-04",
+          "category": "lookup",
+          "expected_docs": [
+            "evaluation"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "evaluation",
+            "backoff",
+            "prompt-injection"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 406
+        },
+        {
+          "id": "multi-01",
+          "category": "multi_hop",
+          "expected_docs": [
+            "agent-loop",
+            "context-window"
+          ],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [
+            "agent-loop",
+            "context-window"
+          ],
+          "hit": false,
+          "sources": [
+            "prompt-injection",
+            "latency-budget",
+            "evaluation"
+          ],
+          "answer_ok": false,
+          "failures": [
+            "missing 'context window'"
+          ],
+          "prompt_tokens": 384
+        },
+        {
+          "id": "multi-02",
+          "category": "multi_hop",
+          "expected_docs": [
+            "latency-budget"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "latency-budget",
+            "observability",
+            "backoff"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 408
+        },
+        {
+          "id": "multi-03",
+          "category": "multi_hop",
+          "expected_docs": [
+            "backoff"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "backoff",
+            "context-window",
+            "observability"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 413
+        },
+        {
+          "id": "para-01",
+          "category": "paraphrase",
+          "expected_docs": [
+            "embedding-retrieval"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "embedding-retrieval",
+            "tool-registry",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 403
+        },
+        {
+          "id": "para-02",
+          "category": "paraphrase",
+          "expected_docs": [
+            "observability"
+          ],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [
+            "observability"
+          ],
+          "hit": false,
+          "sources": [
+            "compaction",
+            "function-calling",
+            "backoff"
+          ],
+          "answer_ok": false,
+          "failures": [
+            "missing any of ('transcript', 'trace', 'record', 'replay')"
+          ],
+          "prompt_tokens": 404
+        },
+        {
+          "id": "para-03",
+          "category": "paraphrase",
+          "expected_docs": [
+            "compaction"
+          ],
+          "expected_rank": 3,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "tool-registry",
+            "observability",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 396
+        },
+        {
+          "id": "neg-01",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [
+            "observability",
+            "tool-registry",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 379
+        },
+        {
+          "id": "neg-02",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [
+            "prompt-injection",
+            "tool-registry",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 397
+        },
+        {
+          "id": "neg-03",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [
+            "tokenization",
+            "context-window",
+            "latency-budget"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 366
+        }
+      ]
+    },
+    "hybrid": {
+      "overall": {
+        "hit_rate": 0.9,
+        "coverage": 0.95,
+        "mrr": 0.7867,
+        "answer_accuracy": 0.9231,
+        "prompt_tokens": 5148,
+        "generation_calls": 13
+      },
+      "per_category": [
+        {
+          "category": "lookup",
+          "tasks": 4,
+          "scored": 4,
+          "hit_rate": 1.0,
+          "mrr": 1.0,
+          "coverage": 1.0,
+          "answer_accuracy": 1.0
+        },
+        {
+          "category": "multi_hop",
+          "tasks": 3,
+          "scored": 3,
+          "hit_rate": 0.6667,
+          "mrr": 0.7778,
+          "coverage": 0.8333,
+          "answer_accuracy": 0.6667
+        },
+        {
+          "category": "paraphrase",
+          "tasks": 3,
+          "scored": 3,
+          "hit_rate": 1.0,
+          "mrr": 0.5111,
+          "coverage": 1.0,
+          "answer_accuracy": 1.0
+        },
+        {
+          "category": "negative",
+          "tasks": 3,
+          "scored": 0,
+          "hit_rate": 0.0,
+          "mrr": 0.0,
+          "coverage": 0.0,
+          "answer_accuracy": 1.0
+        }
+      ],
+      "per_task": [
+        {
+          "id": "lookup-01",
+          "category": "lookup",
+          "expected_docs": [
+            "tool-registry"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "tool-registry",
+            "agent-loop",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 394
+        },
+        {
+          "id": "lookup-02",
+          "category": "lookup",
+          "expected_docs": [
+            "tokenization"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "tokenization",
+            "latency-budget",
+            "prompt-injection"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 374
+        },
+        {
+          "id": "lookup-03",
+          "category": "lookup",
+          "expected_docs": [
+            "prompt-injection"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "prompt-injection",
+            "context-window",
+            "tool-registry"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 388
+        },
+        {
+          "id": "lookup-04",
+          "category": "lookup",
+          "expected_docs": [
+            "evaluation"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "evaluation",
+            "observability",
+            "latency-budget"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 404
+        },
+        {
+          "id": "multi-01",
+          "category": "multi_hop",
+          "expected_docs": [
+            "agent-loop",
+            "context-window"
+          ],
+          "expected_rank": 3,
+          "coverage": 0.5,
+          "missing": [
+            "context-window"
+          ],
+          "hit": false,
+          "sources": [
+            "latency-budget",
+            "prompt-injection",
+            "agent-loop"
+          ],
+          "answer_ok": false,
+          "failures": [
+            "missing 'context window'"
+          ],
+          "prompt_tokens": 393
+        },
+        {
+          "id": "multi-02",
+          "category": "multi_hop",
+          "expected_docs": [
+            "latency-budget"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "latency-budget",
+            "observability",
+            "backoff"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 419
+        },
+        {
+          "id": "multi-03",
+          "category": "multi_hop",
+          "expected_docs": [
+            "backoff"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "backoff",
+            "context-window",
+            "observability"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 405
+        },
+        {
+          "id": "para-01",
+          "category": "paraphrase",
+          "expected_docs": [
+            "embedding-retrieval"
+          ],
+          "expected_rank": 1,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "embedding-retrieval",
+            "observability",
+            "tool-registry"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 413
+        },
+        {
+          "id": "para-02",
+          "category": "paraphrase",
+          "expected_docs": [
+            "observability"
+          ],
+          "expected_rank": 5,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "backoff",
+            "compaction",
+            "function-calling"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 406
+        },
+        {
+          "id": "para-03",
+          "category": "paraphrase",
+          "expected_docs": [
+            "compaction"
+          ],
+          "expected_rank": 3,
+          "coverage": 1.0,
+          "missing": [],
+          "hit": true,
+          "sources": [
+            "agent-loop",
+            "tool-registry",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 410
+        },
+        {
+          "id": "neg-01",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [
+            "observability",
+            "tool-registry",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 379
+        },
+        {
+          "id": "neg-02",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [
+            "prompt-injection",
+            "tool-registry",
+            "compaction"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 397
+        },
+        {
+          "id": "neg-03",
+          "category": "negative",
+          "expected_docs": [],
+          "expected_rank": null,
+          "coverage": 0.0,
+          "missing": [],
+          "hit": false,
+          "sources": [
+            "tokenization",
+            "context-window",
+            "latency-budget"
+          ],
+          "answer_ok": true,
+          "failures": [],
+          "prompt_tokens": 366
+        }
+      ]
+    }
+  }
+}
