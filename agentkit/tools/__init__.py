@@ -10,12 +10,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..registry import Tool, ToolRegistry
-from . import calendar, chart, fx, search, todo, weather
+from . import calendar, chart, files, fx, search, todo, weather
 
 __all__ = [
     "build_registry",
     "calendar",
     "chart",
+    "files",
     "fx",
     "search",
     "todo",
@@ -32,7 +33,9 @@ def build_registry(
     with_weather: bool = True,
     with_fx: bool = True,
     with_chart: bool = True,
+    with_files: bool = False,
     chart_output_dir: str | None = None,
+    workspace: str | None = None,
     todo_service: "todo.TodoService | None" = None,
     calendar_service: "calendar.CalendarService | None" = None,
 ) -> ToolRegistry:
@@ -56,4 +59,6 @@ def build_registry(
     if with_chart:
         output_dir = Path(chart_output_dir) if chart_output_dir else None
         chart.register(registry, chart.ChartService(output_dir=output_dir))
+    if with_files:
+        files.register(registry, workspace)
     return registry

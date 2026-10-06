@@ -70,6 +70,7 @@ CHAT_PAGE = """<!doctype html>
       <li>📅 calendar — 日历事件</li>
       <li>🔍 search — 知识库搜索</li>
       <li>📊 chart — 生成图表</li>
+      <li>📁 files — 文件读写搜索</li>
     </ul>
     <h3>Views</h3>
     <ul>
@@ -228,6 +229,7 @@ def create_app(
     # Build the chat agent once, reuse across requests.
     chat_agent: ToolCallingAgent | None = None
     if model is not None:
+        workspace = os.environ.get("ASSISTANT_WORKSPACE", str(Path.home()))
         registry = build_registry(
             with_todos=True,
             with_calendar=True,
@@ -235,6 +237,8 @@ def create_app(
             with_fx=True,
             with_search=True,
             with_chart=True,
+            with_files=True,
+            workspace=workspace,
         )
         invoker = ToolInvoker(registry, default_timeout=30.0)
         chat_agent = ToolCallingAgent(
