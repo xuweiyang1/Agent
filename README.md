@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 459 tests. If it does, everything below is
+That command should print `OK` with 466 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -46,12 +46,28 @@ python scripts\rag_compare.py       # W6: naive vs agentic retrieval, side by si
 python scripts\rag_vector_compare.py # the store swap: BM25 vs dense vs hybrid
 python scripts\rag_agents.py        # W7: single vs multi-agent, and the break-even
 python scripts\demo_chain.py        # the whole chain: image -> todos -> calendar
-python scripts\serve_local.py       # the local deployment: a chat UI with memory, plus the chain
+python scripts\serve_local.py --offline # local chat UI, deterministic model, no key/network
 python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 
 None of these need an API key. `agentloop/` needs no third-party packages at
 all, so if you only want W1 you can skip the install.
+
+### Local assistant: ready for a second tab and a phone
+
+`python scripts\serve_local.py --offline` starts the complete browser assistant
+without an API key or network access. The offline model is deterministic and
+is meant to exercise the UI, tool wiring, persistence, and error paths; it is
+not a substitute for a capable production model. Omitting `--offline` makes
+the app use the provider configured by environment variables. Each
+conversation is stored as its own readable JSON
+file and writes are atomic, so a refresh or a process restart does not lose a
+turn. Requests for the same conversation are serialised while different
+conversations can run in parallel; this prevents double-clicks from silently
+overwriting history. The chat input accepts multiline messages (`Shift+Enter`)
+and the sidebar collapses on narrow screens. Oversized messages are rejected
+before a model call, and a timed-out or exhausted agent returns a clear answer
+instead of an empty bubble.
 
 ### Where to look next
 

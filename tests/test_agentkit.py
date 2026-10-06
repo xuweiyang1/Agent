@@ -321,6 +321,20 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(result.turns, 3)
         self.assertEqual(result.answer, "")
 
+    def test_model_call_is_bounded_by_run_timeout(self):
+        class SlowModel:
+            async def acomplete(self, messages, tools):
+                await asyncio.sleep(1)
+                return ChatMessage(role="assistant", content="too late")
+
+        result = run(
+            ToolCallingAgent(
+                SlowModel(), ToolInvoker(build_registry()), run_timeout=0.01
+            ).run("hello")
+        )
+        self.assertTrue(result.truncated)
+        self.assertEqual(result.answer, "")
+
 
 class ApiTests(unittest.TestCase):
     @classmethod

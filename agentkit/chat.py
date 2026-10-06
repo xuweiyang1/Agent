@@ -15,6 +15,7 @@ and no network, and a real model can replace it without touching the loop.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -97,7 +98,26 @@ class ToolCallingAgent:
                 self._emit("run_timeout", turns=turns)
                 break
 
-            reply = await self.model.acomplete(list(messages), self.invoker.registry.schemas())
+            remaining = self.run_timeout - (time.perf_counter() - started)
+            if remaining <= 0:
+                truncated = True
+                self._emit("run_timeout", turns=turns)
+                break
+            try:
+                # ``run_timeout`` is a real deadline, not only a check between
+                # turns.  A provider can hang inside one await, and the HTTP
+                # caller should still receive a bounded response.  Keep both
+                # timeout classes for Python 3.10, where they are distinct.
+                reply = await asyncio.wait_for(
+                    self.model.acomplete(
+                        list(messages), self.invoker.registry.schemas()
+                    ),
+                    timeout=remaining,
+                )
+            except (asyncio.TimeoutError, TimeoutError):
+                truncated = True
+                self._emit("run_timeout", turns=turns)
+                break
             messages.append(reply)
 
             if not reply.tool_calls:
@@ -106,8 +126,23 @@ class ToolCallingAgent:
                 self._emit("answer", turns=turns, elapsed_ms=round(elapsed, 3))
                 return TurnResult(messages, reply.text(), dispatch, turns, False, elapsed)
 
-            # Independent calls in one turn are concurrent on purpose.
-            results = await self._invoke_all(reply.tool_calls)
+            # Independent calls in one turn are concurrent on purpose.  The
+            # same deadline covers the tool round too; otherwise a model that
+            # answers quickly could still leave an HTTP request waiting on a
+            # slow provider tool after the advertised run budget elapsed.
+            remaining = self.run_timeout - (time.perf_counter() - started)
+            if remaining <= 0:
+                truncated = True
+                self._emit("run_timeout", turns=turns)
+                break
+            try:
+                results = await asyncio.wait_for(
+                    self._invoke_all(reply.tool_calls), timeout=remaining
+                )
+            except (asyncio.TimeoutError, TimeoutError):
+                truncated = True
+                self._emit("run_timeout", turns=turns)
+                break
             for result in results:
                 dispatch.append(result)
                 messages.append(

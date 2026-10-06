@@ -242,7 +242,44 @@ class _TodoCallingModel:
         return ChatMessage(role="assistant", content="已记下这条待办。")
 
 
+class _LoopingToolModel:
+    """Keeps asking for a tool so the HTTP layer must stop gracefully."""
+
+    async def acomplete(self, messages, tools):
+        return ChatMessage(
+            role="assistant",
+            tool_calls=[ToolCall("loop", "todo", {"action": "list"})],
+        )
+
+
 class ChatPersistenceTests(unittest.TestCase):
+    def test_a_message_over_the_limit_is_rejected_before_model_use(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(state_dir=tmp, model=_EchoModel())
+            app.state.max_message_chars = 3
+            response = TestClient(app).post("/chat", json={"message": "四个字啊"})
+        self.assertEqual(response.status_code, 413)
+        self.assertIn("max 3", response.json()["detail"])
+
+    def test_chat_response_reports_turn_cost_and_elapsed_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            response = TestClient(create_app(state_dir=tmp, model=_EchoModel())).post(
+                "/chat", json={"message": "你好"}
+            )
+        body = response.json()
+        self.assertGreater(body["tokens"], 0)
+        self.assertGreaterEqual(body["elapsed_ms"], 0)
+        self.assertFalse(body["truncated"])
+
+    def test_a_model_that_never_answers_gets_a_bounded_sentence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            response = TestClient(create_app(state_dir=tmp, model=_LoopingToolModel())).post(
+                "/chat", json={"message": "列出待办"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["truncated"])
+        self.assertIn("轮次上限", response.json()["answer"])
+
     def test_a_turn_is_written_to_the_conversation_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(state_dir=tmp, model=_EchoModel()))
@@ -313,8 +350,15 @@ class ChatFrontendTests(unittest.TestCase):
 
     def test_no_leftover_template_placeholders(self):
         page = self._page()
-        for placeholder in ("__TOOL_LIST__", "__MEMORY_PILLS__", "__MESSAGES__", "__TOKENS__", "__TURNS__"):
+        for placeholder in ("__TOOL_LIST__", "__MEMORY_PILLS__", "__MESSAGES__", "__TOKENS__", "__TURNS__", "__MAX_MESSAGE_CHARS__"):
             self.assertNotIn(placeholder, page)
+
+    def test_page_uses_the_configured_message_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(state_dir=tmp, model=_EchoModel())
+            app.state.max_message_chars = 123
+            page = TestClient(app).get("/").text
+        self.assertIn('maxlength="123"', page)
 
     def test_the_page_has_a_usable_send_path(self):
         page = self._page()
@@ -327,6 +371,16 @@ class ChatFrontendTests(unittest.TestCase):
         self.assertIn('class="tool"', page)
         self.assertIn("data-prompt=", page)
         self.assertIn("dataset.prompt", page.split("<script>")[-1])
+        self.assertIn("failedChipRow", page.split("<script>")[-1])
+
+    def test_conversation_titles_escape_attribute_quotes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = TestClient(create_app(state_dir=tmp, model=_EchoModel()))
+            client.get("/")
+            client.post("/chat", json={"message": 'say "hello" <there>'})
+            page = client.get("/").text
+        self.assertIn("&quot;hello&quot;", page)
+        self.assertNotIn('title="say "hello"', page)
 
 
 
@@ -407,6 +461,11 @@ class ConversationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             client = self._client(tmp)
             self.assertEqual(client.get("/?c=..%2F..%2Fetc%2Fpasswd").status_code, 400)
+
+    def test_an_unknown_conversation_id_shape_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            self.assertEqual(client.get("/?c=notes").status_code, 400)
 
     def test_a_legacy_chat_json_is_imported_once(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -14,9 +14,10 @@ version:
 
 - **The transcript is the server's, not the browser's.** The first version
   kept history in a JavaScript variable, so a reload -- let alone a restart --
-  wiped it. Here every turn is appended to ``state_dir/chat.json`` and the
-  page is rendered from it, which is what "come back tomorrow" requires. The
-  file is plain JSON so a human can read or repair it.
+  wiped it. Here every turn is appended to one readable JSON file per
+  conversation and the page is rendered from it, which is what "come back
+  tomorrow" requires. The files are plain JSON so a human can read or repair
+  them.
 - **W5's long-term memory is actually wired in.** The first version had no
   way to write a preference, so nothing was ever remembered. The chat agent
   now gets a ``memory`` tool to store preferences/decisions/facts, and every
@@ -37,9 +38,11 @@ argument for doing it in this order.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
-from datetime import date
+import uuid
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -155,9 +158,11 @@ CHAT_PAGE = """<!doctype html>
   /* composer */
   .input-bar { padding: .9rem 1.5rem 1.2rem; border-top: 1px solid var(--line);
                display: flex; gap: .6rem; }
-  .input-bar input { flex: 1; padding: .75rem .95rem; border: 1px solid var(--line);
-                     border-radius: 12px; font-size: 15px; outline: none; background: #fafafe; }
-  .input-bar input:focus { border-color: var(--accent); background: #fff;
+  .input-bar textarea { flex: 1; min-height: 44px; max-height: 150px; resize: none;
+                     padding: .65rem .95rem; border: 1px solid var(--line);
+                     border-radius: 12px; font: inherit; font-size: 15px; line-height: 1.45;
+                     outline: none; background: #fafafe; overflow-y: auto; }
+  .input-bar textarea:focus { border-color: var(--accent); background: #fff;
                            box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
   .input-bar button { padding: .75rem 1.35rem; background: var(--accent); color: #fff;
                       border: none; border-radius: 12px; font-weight: 650; cursor: pointer; }
@@ -170,6 +175,25 @@ CHAT_PAGE = """<!doctype html>
   .typing span:nth-child(2) { animation-delay: .15s; }
   .typing span:nth-child(3) { animation-delay: .3s; }
   @keyframes b { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+  .mobile-toggle { display: none; border: 1px solid var(--line); background: #fff; color: var(--muted);
+                   border-radius: 9px; padding: .35rem .55rem; cursor: pointer; font-size: 16px; }
+  .backdrop { display: none; }
+  @media (max-width: 760px) {
+    .layout { width: 100%; box-shadow: none; }
+    .sidebar { position: fixed; z-index: 20; inset: 0 auto 0 0; height: 100%;
+               transform: translateX(-105%); transition: transform .18s ease;
+               box-shadow: 8px 0 30px rgba(20,20,50,.12); }
+    .layout.sidebar-open .sidebar { transform: translateX(0); }
+    .layout.sidebar-open .backdrop { display: block; position: fixed; z-index: 10; inset: 0;
+                                     background: rgba(15,23,42,.25); }
+    .mobile-toggle { display: inline-flex; align-items: center; justify-content: center; }
+    .chat-header { padding: .8rem 1rem; gap: .65rem; }
+    .chat-header .title { flex: 1; }
+    .messages { padding: 1rem .8rem; }
+    .msg { max-width: 94%; }
+    .input-bar { padding: .7rem .8rem .85rem; }
+    .input-bar button { padding: .65rem .9rem; }
+  }
 </style></head><body>
 <div class="layout">
   <aside class="sidebar">
@@ -201,14 +225,16 @@ CHAT_PAGE = """<!doctype html>
     <div style="margin-top:.7rem"><button class="ghost" id="clear">清空当前对话</button></div>
   </aside>
 
+  <div class="backdrop" id="backdrop"></div>
   <main class="chat">
     <div class="chat-header">
+      <button class="mobile-toggle" id="sidebar-toggle" aria-label="打开侧栏">☰</button>
       <div class="title">💬 Assistant</div>
-      <div class="sub" id="status">就绪</div>
+      <div class="sub" id="status" aria-live="polite">就绪</div>
     </div>
     <div class="messages" id="messages">__MESSAGES__</div>
     <div class="input-bar">
-      <input id="input" placeholder="输入消息，回车发送…" autofocus autocomplete="off">
+      <textarea id="input" rows="1" maxlength="__MAX_MESSAGE_CHARS__" placeholder="输入消息，回车发送；Shift + 回车换行…" autofocus></textarea>
       <button id="send">发送</button>
     </div>
   </main>
@@ -222,7 +248,20 @@ const turnEl = document.getElementById('turn-count');
 const statusEl = document.getElementById('status');
 const clearBtn = document.getElementById('clear');
 const newConvBtn = document.getElementById('new-conv');
+const layoutEl = document.querySelector('.layout');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const backdropEl = document.getElementById('backdrop');
 const CONV_ID = "__CONV_ID__";
+
+function resizeInput() {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 150) + 'px';
+}
+
+function closeSidebar() { layoutEl.classList.remove('sidebar-open'); }
+sidebarToggle.addEventListener('click', () => layoutEl.classList.toggle('sidebar-open'));
+backdropEl.addEventListener('click', closeSidebar);
+document.querySelectorAll('.convs a, .sidebar a').forEach(link => link.addEventListener('click', closeSidebar));
 
 function bubble(role, text) {
   const msg = document.createElement('div');
@@ -255,6 +294,21 @@ function chipRow(parent, tools) {
   parent.appendChild(row);
 }
 
+function failedChipRow(parent, failures) {
+  if (!failures || !failures.length) return;
+  const row = document.createElement('div');
+  row.className = 'chips';
+  failures.forEach(f => {
+    const c = document.createElement('span');
+    c.className = 'chip';
+    c.style.color = '#b91c1c';
+    c.style.background = '#fee2e2';
+    c.textContent = (f.name || 'tool') + ' · ' + (f.error || 'failed');
+    row.appendChild(c);
+  });
+  parent.appendChild(row);
+}
+
 function typing(bubbleEl) {
   bubbleEl.className = 'bubble typing';
   bubbleEl.innerHTML = '<span></span><span></span><span></span>';
@@ -277,14 +331,17 @@ async function send() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({message: text, conversation: CONV_ID}),
     });
-    const data = await resp.json();
+    const raw = await resp.text();
+    let data = {};
+    try { data = raw ? JSON.parse(raw) : {}; } catch (_) { data = {}; }
     if (!resp.ok) throw new Error(data.detail || 'request failed');
     pending.className = 'bubble';
-    pending.textContent = data.answer || '(no answer)';
+    pending.textContent = data.answer || '这次没有得到完整回答，请再试一次。';
     chipRow(pending.parentElement, data.tools);
+    failedChipRow(pending.parentElement, data.failed_tools);
     tokenEl.textContent = data.tokens;
     turnEl.textContent = data.turns;
-    statusEl.textContent = '就绪';
+    statusEl.textContent = data.truncated ? '已超时，回答可能不完整' : '就绪';
   } catch (e) {
     pending.className = 'bubble';
     pending.textContent = '出错了：' + e.message;
@@ -296,7 +353,11 @@ async function send() {
 }
 
 sendBtn.addEventListener('click', send);
-inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+inputEl.addEventListener('input', resizeInput);
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+resizeInput();
 clearBtn.addEventListener('click', async () => {
   if (!confirm('清空当前对话的内容？（长期记忆和待办不受影响）')) return;
   await fetch('/chat/clear', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -408,7 +469,11 @@ def _tool_list_html(names: list[str]) -> str:
 
 def _escape(text: str) -> str:
     return (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
     )
 
 
@@ -509,6 +574,38 @@ def _plan_page_with_result(run: Any, fields: dict[str, str]) -> str:
     return PLAN_PAGE.format(result=RESULT.format(body=body), **fields)
 
 
+def _atomic_json_write(path: Path, payload: Any) -> None:
+    """Write JSON through a sibling temporary file, then replace the target.
+
+    The local deployment deliberately uses readable files, but a readable file
+    is not useful if a process dies halfway through ``write_text``.  Replacing
+    a completed sibling is atomic on the same Windows volume and also keeps a
+    concurrent browser refresh from observing half a JSON document.  The
+    random suffix matters because two requests can be writing different
+    conversations at the same time.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _positive_int(value: str | None, default: int) -> int:
+    """Parse a positive environment setting without making startup fragile."""
+    try:
+        parsed = int(value or "")
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
@@ -524,9 +621,12 @@ def create_app(
     runs_dir = state / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(title="local-assistant", version="0.3.0")
+    app = FastAPI(title="local-assistant", version="0.4.0")
     app.state.state_dir = state
     app.state.model = model
+    app.state.max_message_chars = _positive_int(
+        os.environ.get("ASSISTANT_MAX_MESSAGE_CHARS"), 4000
+    )
 
     # Long-term memory is built even without a model, so ``/state`` can report
     # it and a restart demonstrates persistence rather than a fresh start.
@@ -566,6 +666,7 @@ def create_app(
         chat_agent = ToolCallingAgent(model, invoker, max_turns=8)
     app.state.longterm = longterm
     app.state.registry = registry
+    app.state.chat_agent = chat_agent
 
     # -- conversations on disk ---------------------------------------------
     #
@@ -578,6 +679,14 @@ def create_app(
 
     conversations_dir = state / "conversations"
     conversations_dir.mkdir(parents=True, exist_ok=True)
+    # A browser can submit twice (double-click, retry, or two tabs).  Serialise
+    # turns per conversation so neither request reads the same old tail and
+    # overwrites the other's answer.  Different conversations still run in
+    # parallel, which keeps the local app responsive.
+    conversation_locks: dict[str, asyncio.Lock] = {}
+
+    def _conversation_lock(conversation_id: str) -> asyncio.Lock:
+        return conversation_locks.setdefault(conversation_id, asyncio.Lock())
 
     def _conversation_ids() -> list[str]:
         return sorted(path.stem for path in conversations_dir.glob("c*.json"))
@@ -593,7 +702,11 @@ def create_app(
         # The id arrives from a query string, so it is validated to a known
         # shape before it is joined to a path: ``..`` or an absolute path must
         # not be able to escape the state directory.
-        if not conversation_id or not conversation_id.replace("-", "").isalnum():
+        if (
+            not conversation_id
+            or not conversation_id.startswith("c")
+            or not conversation_id[1:].isdigit()
+        ):
             raise HTTPException(status_code=400, detail="bad conversation id")
         return conversations_dir / f"{conversation_id}.json"
 
@@ -625,12 +738,10 @@ def create_app(
         payload = {
             "id": conversation_id,
             "title": title,
-            "updated": date.today().isoformat(),
+            "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "turns": turns,
         }
-        path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        _atomic_json_write(path, payload)
 
     def _conversation_list() -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -701,6 +812,7 @@ def create_app(
             .replace("__MESSAGES__", _message_html(turns))
             .replace("__TOKENS__", "0")
             .replace("__TURNS__", str(len(turns)))
+            .replace("__MAX_MESSAGE_CHARS__", str(app.state.max_message_chars))
             .replace("__CONV_ID__", _escape(conversation_id))
         )
 
@@ -724,8 +836,12 @@ def create_app(
     @app.delete("/conversations/{conversation_id}")
     async def delete_conversation(conversation_id: str) -> JSONResponse:
         path = _conversation_path(conversation_id)
-        if path.is_file():
-            path.unlink()
+        async with _conversation_lock(conversation_id):
+            if path.is_file():
+                path.unlink()
+        # Keep the lock object after deletion.  A request that was queued just
+        # before the delete may still hold a reference to it; replacing it
+        # here would let a later request for the same id race that queued one.
         return JSONResponse({"ok": True, "conversations": _conversation_list()})
 
     @app.post("/chat")
@@ -733,49 +849,100 @@ def create_app(
         if chat_agent is None:
             raise HTTPException(status_code=503, detail="no model configured")
 
-        message = str(request.get("message", "")).strip()
+        raw_message = request.get("message", "")
+        if not isinstance(raw_message, str):
+            raise HTTPException(status_code=400, detail="message must be text")
+        message = raw_message.strip()
         if not message:
             raise HTTPException(status_code=400, detail="message is required")
+        if len(message) > app.state.max_message_chars:
+            raise HTTPException(
+                status_code=413,
+                detail=f"message is too long (max {app.state.max_message_chars} characters)",
+            )
         conversation_id = str(request.get("conversation") or "").strip() or _ensure_conversation()
+        # Validate before entering the lock so a malformed id cannot create a
+        # lock entry or a file outside the conversations directory.
+        _conversation_path(conversation_id)
 
-        payload = _load_conversation(conversation_id)
-        turns = payload["turns"]
-        history = [
-            ChatMessage(role=turn["role"], content=str(turn.get("text", "")))
-            for turn in turns[-HISTORY_TURNS:]
-            if turn.get("role") in ("user", "assistant") and str(turn.get("text", "")).strip()
-        ]
+        async with _conversation_lock(conversation_id):
+            payload = _load_conversation(conversation_id)
+            turns = payload["turns"]
+            history = [
+                ChatMessage(role=turn["role"], content=str(turn.get("text", "")))
+                for turn in turns[-HISTORY_TURNS:]
+                if turn.get("role") in ("user", "assistant")
+                and str(turn.get("text", "")).strip()
+            ]
 
-        # Memory is consulted *before* the answer and injected as a constraint,
-        # which is the difference between remembering and displaying.
-        memory_block = longterm.context_for(message)
-        system_prompt = BASE_SYSTEM_PROMPT
-        if memory_block:
-            system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{memory_block}"
-        chat_agent.system_prompt = system_prompt
+            # Memory is consulted *before* the answer and injected as a
+            # constraint, which is the difference between remembering and
+            # displaying.  A fresh loop object per request avoids mutating a
+            # shared system prompt when two conversations are active at once.
+            memory_block = longterm.context_for(message)
+            system_prompt = BASE_SYSTEM_PROMPT
+            if memory_block:
+                system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{memory_block}"
+            request_agent = ToolCallingAgent(
+                chat_agent.model,
+                chat_agent.invoker,
+                system_prompt=system_prompt,
+                max_turns=chat_agent.max_turns,
+                run_timeout=chat_agent.run_timeout,
+            )
+            try:
+                result = await request_agent.run(message, history=history)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Do not leak provider credentials or a stack trace into the
+                # browser, but retain the cause for server-side logging hooks.
+                raise HTTPException(
+                    status_code=502,
+                    detail="assistant turn failed; please try again",
+                ) from exc
 
-        result = await chat_agent.run(message, history=history)
+            tool_names = [dispatch.name for dispatch in result.dispatch if dispatch.ok]
+            failed_tools = [
+                {
+                    "name": dispatch.name,
+                    "error": dispatch.failure.kind.value if dispatch.failure else "error",
+                }
+                for dispatch in result.dispatch
+                if not dispatch.ok
+            ]
+            answer = result.answer.strip()
+            truncated = result.truncated or result.turns >= request_agent.max_turns and not answer
+            if not answer:
+                answer = (
+                    "这次处理超出了轮次上限，回答可能没有完成。请换一种说法再试一次。"
+                    if truncated
+                    else "模型没有返回文字回答，请再试一次。"
+                )
+            turns.append({"role": "user", "text": message})
+            turns.append({"role": "assistant", "text": answer, "tools": tool_names})
+            _save_conversation(conversation_id, turns)
 
-        tool_names = [dispatch.name for dispatch in result.dispatch if dispatch.ok]
-        turns.append({"role": "user", "text": message})
-        turns.append({"role": "assistant", "text": result.answer, "tools": tool_names})
-        _save_conversation(conversation_id, turns)
-
-        return JSONResponse({
-            "answer": result.answer,
-            "tools": tool_names,
-            "conversation": conversation_id,
-            "tokens": model.usage.total if hasattr(model, "usage") else 0,
-            "turns": len(turns),
-            "memories": len(longterm),
-        })
+            return JSONResponse({
+                "answer": answer,
+                "tools": tool_names,
+                "failed_tools": failed_tools,
+                "conversation": conversation_id,
+                "tokens": result.tokens,
+                "turns": len(turns),
+                "memories": len(longterm),
+                "elapsed_ms": round(result.elapsed_ms, 1),
+                "truncated": truncated,
+            })
 
     @app.post("/chat/clear")
     async def chat_clear(request: dict[str, Any] | None = None) -> dict[str, Any]:
         """Empty one conversation. Long-term memory and todos are untouched."""
         conversation_id = str((request or {}).get("conversation") or "").strip()
         if conversation_id:
-            _save_conversation(conversation_id, [])
+            _conversation_path(conversation_id)
+            async with _conversation_lock(conversation_id):
+                _save_conversation(conversation_id, [])
         return {"ok": True}
 
     # -- travel chain -----------------------------------------------------
@@ -846,10 +1013,12 @@ def create_app(
             state_dir=state,
         )
         serial = run.to_dict()
-        target = runs_dir / f"{today.isoformat()}-{len(list(runs_dir.glob('*.json'))):03d}.json"
-        target.write_text(
-            json.dumps(serial, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        # A count-based filename collides when two browser tabs submit a plan
+        # at once.  A UTC timestamp plus a short random suffix keeps every run
+        # auditable without requiring a database sequence.
+        stamp = datetime.now(timezone.utc).strftime("%H%M%S%f")
+        target = runs_dir / f"{today.isoformat()}-{stamp}-{uuid.uuid4().hex[:8]}.json"
+        _atomic_json_write(target, serial)
         return run
 
     # -- state -------------------------------------------------------------

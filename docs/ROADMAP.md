@@ -289,12 +289,14 @@ uns/），重启不丢。三处接缝：
 un_chain 新增 perceived_override（外部已读到的字段可跳过 perception，并在步骤里
   记明"no image was read"）与 state_dir（把待办/日历换成小 JSON 存储）；ssistant/vision.py
   是可选真视觉读图器（模型回 JSON，解析容错），没配 key 时表单照常可用。15 项新测试
-  （`tests/test_local_deploy.py`），全量 436 项离线通过。入口 `python scripts/serve_local.py`。
+  （`tests/test_local_deploy.py`），全量 436 项离线通过。入口
+  `python scripts/serve_local.py --offline`（离线聊天）或 `python scripts/serve_local.py`
+  （接真实模型）。
   阶段二（上线版：多用户、鉴权、DB）在此之上加，链与工具不动。
 - **本机部署版加固：聊天界面 + 长期记忆（同一阶段一，补齐可日常使用）**：
   表单版只是"包住整条链"，不是能天天用的助手；三个真实缺陷逐个修掉。
-  (1) 会话只活在浏览器 JS 变量里，刷新即失忆 —— 现在每轮写入 `state_dir/chat.json`，
-  页面加载时回放历史，重启/换标签页都还在。
+  (1) 会话只活在浏览器 JS 变量里，刷新即失忆 —— 现在每轮写入
+  `state_dir/conversations/c*.json`，页面加载时回放历史，重启/换标签页都还在。
   (2) W5 的长期记忆**没有任何写入口**，"会记住"是空话 —— 新增
   `agentkit/tools/memory.py`（一个 `memory` 工具：preference / decision / fact 三种写入 +
   list / recall），每轮把它 `context_for()` 出的偏好与回忆注入 system prompt。记住的是
@@ -322,6 +324,11 @@ un_chain 新增 perceived_override（外部已读到的字段可跳过 perceptio
   启动即崩（`no sandbox root configured`），修复是镜像内 `ENV FS_SANDBOX_ROOT=/data`
   并 `mkdir -p /data`；`check_docs.py` 现会静态要求 recipe 里有 `CMD` 和沙箱根。
   注意 `.dockerignore` 排除 `eval/*.json` 但**不能**排除 `eval/tasks.jsonl`。
+- **本机聊天助手加固（阶段一持续优化）**：聊天请求按对话串行，避免双击或多标签页
+  覆盖历史；会话和运行日志改为同卷原子写入；模型不返回答案或达到轮次上限时，接口返回
+  可解释的兜底文本和 `truncated` 标记；输入超过 4000 字符在模型调用前以 413 拒绝。
+  前端改为可换行 textarea，支持 `Shift+Enter`、移动端侧栏和更稳的错误解析。新增 7 项
+  离线测试，全量 466 项离线通过。环境变量 `ASSISTANT_MAX_MESSAGE_CHARS` 可调整上限。
 ## 10. 风险与取舍
 
 - **LangGraph API 变动快**：node/edge 写薄，业务逻辑别长在框架里。
