@@ -28,6 +28,8 @@ from .messages import ChatMessage, to_wire
 class _BlockAwareModel(OpenAICompatibleModel):
     """W1's adapter, with payload building taught about content blocks."""
 
+    enable_search: bool = False
+
     def _build_payload(
         self, messages: Sequence[ChatMessage], tools: Sequence[dict[str, Any]]
     ) -> dict[str, Any]:
@@ -42,6 +44,8 @@ class _BlockAwareModel(OpenAICompatibleModel):
             payload["temperature"] = self.temperature
         if self.max_tokens is not None:
             payload["max_tokens"] = self.max_tokens
+        if self.enable_search:
+            payload["enable_search"] = True
         return payload
 
 
@@ -63,6 +67,7 @@ class AsyncOpenAICompatibleModel:
         max_tokens: int | None = None,
         transport: Any | None = None,
         timeout: float = 60.0,
+        enable_search: bool = False,
     ) -> None:
         self._sync = _BlockAwareModel(
             api_key=api_key,
@@ -73,6 +78,7 @@ class AsyncOpenAICompatibleModel:
             transport=transport,
             timeout=timeout,
         )
+        self._sync.enable_search = enable_search
         self.model = self._sync.model
 
     @property

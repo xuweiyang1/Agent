@@ -86,7 +86,7 @@ CHAT_PAGE = """<!doctype html>
     <div class="chat-header">💬 Assistant</div>
     <div class="messages" id="messages">
       <div class="msg assistant">
-        <div class="bubble">你好！我是你的本地助手。可以聊天、查天气、管待办、建日历事件。有什么需要帮忙的？</div>
+        <div class="bubble">你好！我是你的本地助手，已开启联网搜索。可以聊天、查天气、管待办、读写文件、搜全网。有什么需要帮忙的？</div>
       </div>
     </div>
     <div class="input-bar">
@@ -437,6 +437,7 @@ def build_model_from_env() -> Any | None:
             "ASSISTANT_BASE_URL",
             "https://dashscope.aliyuncs.com/compatible-mode/v1",
         ),
+        enable_search=True,
     )
 
 
