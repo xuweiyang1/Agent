@@ -51,6 +51,7 @@ def build_registry(
     calendar_service: "calendar.CalendarService | None" = None,
     longterm: Any | None = None,
     note_service: "notes.NoteService | None" = None,
+    weather_service: "weather.WeatherService | None" = None,
 ) -> ToolRegistry:
     """Assemble a registry, optionally with a subset of the tools.
 
@@ -60,7 +61,7 @@ def build_registry(
     """
     registry = ToolRegistry()
     if with_weather:
-        weather.register(registry)
+        weather.register(registry, weather_service)
     if with_fx:
         fx.register(registry)
     if with_todos:

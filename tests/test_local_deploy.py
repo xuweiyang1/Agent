@@ -31,6 +31,8 @@ from agentkit.tools import build_registry
 from agentkit.tools.calendar import CalendarService
 from agentkit.tools.notes import NoteService
 from agentkit.tools.todo import TodoService
+from agentkit.tools.weather import WeatherService, network_with_stub_fallback
+from agentkit.errors import ToolCallError
 from agentloop.llm import ToolCall
 from assistant import run_chain
 from assistant.vision import _clean, _extract_json
@@ -241,20 +243,23 @@ class _TodoCallingModel:
 
 
 class ChatPersistenceTests(unittest.TestCase):
-    def test_a_turn_is_written_to_the_chat_file(self):
+    def test_a_turn_is_written_to_the_conversation_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(state_dir=tmp, model=_EchoModel()))
+            client.get("/")  # creates the first conversation
             client.post("/chat", json={"message": "你好"})
-            payload = json.loads((Path(tmp) / "chat.json").read_text(encoding="utf-8"))
+            path = Path(tmp) / "conversations" / "c1.json"
+            payload = json.loads(path.read_text(encoding="utf-8"))
         roles = [turn["role"] for turn in payload["turns"]]
         self.assertEqual(roles, ["user", "assistant"])
         self.assertEqual(payload["turns"][0]["text"], "你好")
+        self.assertEqual(payload["title"], "你好")
 
     def test_the_page_replays_the_stored_transcript_after_a_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
-            TestClient(create_app(state_dir=tmp, model=_EchoModel())).post(
-                "/chat", json={"message": "我上周去了杭州"}
-            )
+            first = TestClient(create_app(state_dir=tmp, model=_EchoModel()))
+            first.get("/")
+            first.post("/chat", json={"message": "我上周去了杭州"})
             # A brand-new app over the same directory stands in for a restart.
             page = TestClient(create_app(state_dir=tmp, model=_EchoModel())).get("/").text
         self.assertIn("我上周去了杭州", page)
@@ -264,7 +269,9 @@ class ChatPersistenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(state_dir=tmp, model=model)
             app.state.longterm.remember_preference("seat", "aisle")
-            TestClient(app).post("/chat", json={"message": "帮我选个座位"})
+            client = TestClient(app)
+            client.get("/")
+            client.post("/chat", json={"message": "帮我选个座位"})
         system = next(m for m in model.seen[0] if m.role == "system")
         self.assertIn("aisle", system.text())
 
@@ -280,9 +287,12 @@ class ChatPersistenceTests(unittest.TestCase):
             app = create_app(state_dir=tmp, model=_EchoModel())
             app.state.longterm.remember_preference("hotel", "quiet")
             client = TestClient(app)
+            client.get("/")
             client.post("/chat", json={"message": "你好"})
-            client.post("/chat/clear")
-            turns = json.loads((Path(tmp) / "chat.json").read_text(encoding="utf-8"))["turns"]
+            client.post("/chat/clear", json={"conversation": "c1"})
+            turns = json.loads(
+                (Path(tmp) / "conversations" / "c1.json").read_text(encoding="utf-8")
+            )["turns"]
         self.assertEqual(turns, [])
         self.assertEqual(app.state.longterm.preference("hotel"), "quiet")
 
@@ -317,6 +327,147 @@ class ChatFrontendTests(unittest.TestCase):
         self.assertIn('class="tool"', page)
         self.assertIn("data-prompt=", page)
         self.assertIn("dataset.prompt", page.split("<script>")[-1])
+
+
+
+def _fallback_over(fetcher):
+    """The same rule ``network_with_stub_fallback`` applies, over any fetcher.
+
+    Extracted so the fallback decision -- known city degrades, unknown city
+    stays NOT_FOUND -- is testable without reaching the network.
+    """
+    from agentkit.tools.weather import _BUILTIN, _stub
+
+    async def fallback(city, days):
+        try:
+            return await fetcher(city, days)
+        except ToolCallError as exc:
+            base = _BUILTIN.get(city.strip().lower())
+            if base is not None and exc.kind in (ErrorKind.UPSTREAM, ErrorKind.TIMEOUT):
+                return _stub(city, days, base)
+            raise
+
+    return fallback
+
+
+class ConversationTests(unittest.TestCase):
+    """Multiple conversations, which the single ``chat.json`` made impossible."""
+
+    def _client(self, tmp):
+        return TestClient(create_app(state_dir=tmp, model=_EchoModel()))
+
+    def test_a_new_conversation_does_not_touch_the_old_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            client.get("/")  # creates c1
+            client.post("/chat", json={"message": "第一个话题"})
+            second = client.post("/conversations").json()["id"]
+            client.post("/chat", json={"message": "第二个话题", "conversation": second})
+
+            first_body = client.get("/?c=c1").text
+            second_body = client.get(f"/?c={second}").text
+        self.assertIn("第一个话题", first_body)
+        self.assertNotIn("第二个话题", first_body.split('id="messages"')[1].split("</main>")[0])
+        self.assertIn("第二个话题", second_body)
+
+    def test_a_conversation_is_titled_by_its_first_message(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            client.get("/")
+            client.post("/chat", json={"message": "帮我规划周末"})
+            rows = client.get("/conversations").json()["conversations"]
+        self.assertEqual(rows[0]["title"], "帮我规划周末")
+        self.assertEqual(rows[0]["turns"], 2)
+
+    def test_clearing_one_conversation_leaves_the_other(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            client.get("/")
+            client.post("/chat", json={"message": "甲"})
+            second = client.post("/conversations").json()["id"]
+            client.post("/chat", json={"message": "乙", "conversation": second})
+
+            client.post("/chat/clear", json={"conversation": "c1"})
+            first_body = client.get("/?c=c1").text
+            second_body = client.get(f"/?c={second}").text
+        self.assertNotIn("甲", first_body.split('id="messages"')[1].split("</main>")[0])
+        self.assertIn("乙", second_body)
+
+    def test_deleting_a_conversation_removes_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            client.get("/")
+            client.post("/chat", json={"message": "甲"})
+            second = client.post("/conversations").json()["id"]
+            client.delete("/conversations/c1")
+            rows = client.get("/conversations").json()["conversations"]
+        self.assertEqual([row["id"] for row in rows], [second])
+
+    def test_a_traversing_id_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            self.assertEqual(client.get("/?c=..%2F..%2Fetc%2Fpasswd").status_code, 400)
+
+    def test_a_legacy_chat_json_is_imported_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = Path(tmp) / "chat.json"
+            legacy.write_text(
+                json.dumps({"turns": [{"role": "user", "text": "旧的对话"}]}),
+                encoding="utf-8",
+            )
+            client = self._client(tmp)
+            page = client.get("/").text
+            imported = (Path(tmp) / "chat.json.imported").is_file()
+        self.assertIn("旧的对话", page)
+        self.assertTrue(imported)
+
+
+class WeatherToolTests(unittest.TestCase):
+    """The weather tool must answer a Chinese city name, not refuse it.
+
+    The first version matched six hardcoded English names, so 南充 and 成都
+    both came back NOT_FOUND and the model padded the refusal into an
+    apology. Geocoding is the fix; these pin the seam with an injected
+    fetcher so the suite stays offline.
+    """
+
+    def _invoke(self, fetcher, city="南充"):
+        registry = build_registry(
+            with_todos=False, with_calendar=False, with_search=False,
+            with_chart=False, with_fx=False, with_notes=False,
+            with_weather=True, weather_service=WeatherService(fetcher=fetcher),
+        )
+        return asyncio.run(ToolInvoker(registry).invoke("weather", {"city": city, "days": 1}))
+
+    def test_a_fetcher_supplies_the_forecast(self):
+        async def fetcher(city, days):
+            return {"city": city, "days": days, "source": "test",
+                    "forecast": [{"day": 1, "condition": "晴", "high": 24, "low": 15}]}
+
+        result = self._invoke(fetcher)
+        self.assertTrue(result.ok)
+        self.assertEqual(result.value["forecast"][0]["condition"], "晴")
+
+    def test_without_a_fetcher_a_known_city_still_answers_offline(self):
+        result = self._invoke(None, city="Shanghai")
+        self.assertTrue(result.ok)
+        self.assertEqual(result.value["source"], "stub")
+
+    def test_without_a_fetcher_an_unknown_city_is_not_found(self):
+        result = self._invoke(None, city="Atlantis")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.failure.kind, ErrorKind.NOT_FOUND)
+
+    def test_a_network_failure_falls_back_only_for_known_cities(self):
+        async def broken(city, days):
+            raise ToolCallError("down", kind=ErrorKind.UPSTREAM)
+
+        # ``network_with_stub_fallback`` wraps the live fetcher; composing the
+        # same rule over an always-failing fetcher tests the rule without the
+        # network.
+        fallback = _fallback_over(broken)
+        self.assertTrue(self._invoke(fallback, city="Shanghai").ok)
+        self.assertFalse(self._invoke(fallback, city="Atlantis").ok)
 
 
 class MemoryToolTests(unittest.TestCase):

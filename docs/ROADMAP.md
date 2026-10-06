@@ -309,6 +309,13 @@ un_chain 新增 perceived_override（外部已读到的字段可跳过 perceptio
   改为直接复用 ``bubble()`` 返回的气泡节点；侧栏工具列表从"静态装饰"改成可点击的
   起始菜单（点一下把该工具的示例问句填进输入框，可改再发），并补 3 项前端回归测试
   （占位符残留 / 发送路径可用 / 工具可点）。全量 449 项离线通过。
+- **按第二次反馈修两处**：天气工具原来只认 6 个写死的英文城市名，模型传「南充」「成都」
+  一律 NOT_FOUND，于是把一次数据缺口道歉成一篇长文 —— 现在接 Open-Meteo（免 key），
+  先 geocode 再取预报，中文城市名直接可用；网络不可达时已知城市回退到内置表，并在
+  payload 的 `source` 里写明来源。另一处是「不能开新对话」：原来全应用只有一份
+  `chat.json`，现在每个对话一个文件（`state_dir/conversations/c*.json`），侧栏可新建、
+  切换、删除，标题取首句；旧的 `chat.json` 首次启动会导入为第一个对话再改名归档，
+  不丢历史。10 项新测试，全量 459 项离线通过。
 - Dockerfile 已就位并**实测构建运行通过**（根目录 `Dockerfile` + `.dockerignore`）：
   `python:3.10-slim` + `requirements.txt` + `python -m mcp_server.cloud --host 0.0.0.0`。
   `healthz` 返回 `{"ok": true, "rooted": "data"}`。第一次构建能过、容器却

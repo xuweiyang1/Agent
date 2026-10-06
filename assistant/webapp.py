@@ -43,7 +43,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from agentkit.chat import ToolCallingAgent
@@ -110,6 +110,19 @@ CHAT_PAGE = """<!doctype html>
                      transition: background .12s ease, color .12s ease; }
   .sidebar li.tool:hover { background: var(--accent-soft); color: #3730a3; }
   .sidebar li.tool:active { transform: translateY(1px); }
+  .conv-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .conv-head h3 { margin: 1.4rem 0 .5rem; }
+  .convs { margin-bottom: .4rem; }
+  .convs li { display: flex; align-items: center; gap: .4rem; border-radius: 8px;
+              padding: .35rem .5rem; margin: 0 -.5rem; }
+  .convs li.active { background: var(--accent-soft); }
+  .convs li a { flex: 1; min-width: 0; color: #374151; text-decoration: none;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .convs li.active a { color: #3730a3; font-weight: 600; }
+  .convs li .del { border: none; background: transparent; color: #b6b9c6; cursor: pointer;
+                   font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 6px; }
+  .convs li .del:hover { color: #dc2626; background: #fee2e2; }
+  .convs .empty { color: #9aa0ad; font-size: 13px; }
   .sidebar a { color: var(--accent); text-decoration: none; font-size: 13.5px; }
   .sidebar a:hover { text-decoration: underline; }
   .pill { display: inline-flex; align-items: center; gap: .4rem; background: #fff;
@@ -162,6 +175,12 @@ CHAT_PAGE = """<!doctype html>
   <aside class="sidebar">
     <div class="brand"><span class="dot">✦</span> local assistant</div>
 
+    <div class="conv-head">
+      <h3>对话</h3>
+      <button class="ghost" id="new-conv" title="开一个新对话">＋ 新对话</button>
+    </div>
+    <ul class="convs">__CONVERSATIONS__</ul>
+
     <h3>Tools</h3>
     <ul>__TOOL_LIST__</ul>
 
@@ -179,7 +198,7 @@ CHAT_PAGE = """<!doctype html>
       <span class="pill">tokens <b id="token-count">__TOKENS__</b></span>
       <span class="pill">turns <b id="turn-count">__TURNS__</b></span>
     </div>
-    <div style="margin-top:.7rem"><button class="ghost" id="clear">清空对话</button></div>
+    <div style="margin-top:.7rem"><button class="ghost" id="clear">清空当前对话</button></div>
   </aside>
 
   <main class="chat">
@@ -202,6 +221,8 @@ const tokenEl = document.getElementById('token-count');
 const turnEl = document.getElementById('turn-count');
 const statusEl = document.getElementById('status');
 const clearBtn = document.getElementById('clear');
+const newConvBtn = document.getElementById('new-conv');
+const CONV_ID = "__CONV_ID__";
 
 function bubble(role, text) {
   const msg = document.createElement('div');
@@ -254,7 +275,7 @@ async function send() {
     const resp = await fetch('/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: text}),
+      body: JSON.stringify({message: text, conversation: CONV_ID}),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || 'request failed');
@@ -277,9 +298,24 @@ async function send() {
 sendBtn.addEventListener('click', send);
 inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 clearBtn.addEventListener('click', async () => {
-  if (!confirm('清空这次对话？（长期记忆和待办不受影响）')) return;
-  await fetch('/chat/clear', {method: 'POST'});
+  if (!confirm('清空当前对话的内容？（长期记忆和待办不受影响）')) return;
+  await fetch('/chat/clear', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify({conversation: CONV_ID})});
   location.reload();
+});
+
+newConvBtn.addEventListener('click', async () => {
+  const data = await (await fetch('/conversations', {method: 'POST'})).json();
+  location.href = '/?c=' + data.id;
+});
+
+document.querySelectorAll('.convs .del').forEach(btn => {
+  btn.addEventListener('click', async e => {
+    e.preventDefault();
+    if (!confirm('删除这个对话？长期记忆和待办不受影响。')) return;
+    await fetch('/conversations/' + btn.dataset.id, {method: 'DELETE'});
+    location.href = '/';
+  });
 });
 
 // Tools are a starter menu, not decoration: clicking one drops a real example
@@ -330,6 +366,32 @@ TOOL_EXAMPLES: dict[str, str] = {
     "memory": "记住我偏好靠窗的座位",
     "note": "帮我记个笔记：周五要带护照",
 }
+
+
+def _conversation_list_html(rows: list[dict[str, Any]], active: str) -> str:
+    """The conversation switcher. Each row links to ``/?c=<id>``.
+
+    Links rather than fetch-and-rerender: switching a conversation is a
+    navigation, and a real href means the back button and middle-click work
+    the way a user expects. Only delete is a fetch, because it removes the
+    row in place instead of reloading.
+    """
+    if not rows:
+        return '<li class="empty">（还没有对话）</li>'
+    items = []
+    for row in rows:
+        conversation_id = str(row["id"])
+        cls = "active" if conversation_id == active else ""
+        title = _escape(str(row.get("title") or "新对话"))
+        count = int(row.get("turns") or 0)
+        label = f"{title}" if count == 0 else f"{title} · {count}"
+        items.append(
+            f'<li class="{cls}">'
+            f'<a href="/?c={_escape(conversation_id)}" title="{title}">{label}</a>'
+            f'<button class="del" data-id="{_escape(conversation_id)}" title="删除这个对话">✕</button>'
+            "</li>"
+        )
+    return "".join(items)
 
 
 def _tool_list_html(names: list[str]) -> str:
@@ -474,6 +536,7 @@ def create_app(
     registry = None
     if model is not None:
         from agentkit.tools.calendar import CalendarService
+        from agentkit.tools.weather import WeatherService, network_with_stub_fallback
         from agentkit.tools.notes import NoteService
         from agentkit.tools.todo import TodoService
 
@@ -485,6 +548,7 @@ def create_app(
             with_todos=True,
             with_calendar=True,
             with_weather=True,
+            weather_service=WeatherService(fetcher=network_with_stub_fallback()),
             with_fx=True,
             with_search=True,
             with_chart=True,
@@ -503,25 +567,107 @@ def create_app(
     app.state.longterm = longterm
     app.state.registry = registry
 
-    # -- transcript on disk ------------------------------------------------
+    # -- conversations on disk ---------------------------------------------
+    #
+    # One conversation per file under ``state_dir/conversations``. A single
+    # shared ``chat.json`` was the first version's mistake: it made "start a
+    # new topic" impossible without destroying the old one, which is not how
+    # anyone uses a chat box. Files stay the storage because the requirement
+    # is still one person on one machine, and a readable file per topic is a
+    # feature -- you can delete one by hand.
 
-    transcript_path = state / "chat.json"
+    conversations_dir = state / "conversations"
+    conversations_dir.mkdir(parents=True, exist_ok=True)
 
-    def _load_turns() -> list[dict[str, Any]]:
-        if not transcript_path.is_file():
-            return []
+    def _conversation_ids() -> list[str]:
+        return sorted(path.stem for path in conversations_dir.glob("c*.json"))
+
+    def _next_id() -> str:
+        highest = 0
+        for name in _conversation_ids():
+            digits = "".join(ch for ch in name if ch.isdigit())
+            highest = max(highest, int(digits) if digits else 0)
+        return f"c{highest + 1}"
+
+    def _conversation_path(conversation_id: str) -> Path:
+        # The id arrives from a query string, so it is validated to a known
+        # shape before it is joined to a path: ``..`` or an absolute path must
+        # not be able to escape the state directory.
+        if not conversation_id or not conversation_id.replace("-", "").isalnum():
+            raise HTTPException(status_code=400, detail="bad conversation id")
+        return conversations_dir / f"{conversation_id}.json"
+
+    def _load_conversation(conversation_id: str) -> dict[str, Any]:
+        path = _conversation_path(conversation_id)
+        if not path.is_file():
+            return {"id": conversation_id, "title": "新对话", "turns": []}
         try:
-            payload = json.loads(transcript_path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            return []
-        turns = payload.get("turns", payload if isinstance(payload, list) else [])
-        return turns if isinstance(turns, list) else []
+            return {"id": conversation_id, "title": "新对话", "turns": []}
+        payload.setdefault("id", conversation_id)
+        payload.setdefault("title", "新对话")
+        turns = payload.get("turns", [])
+        payload["turns"] = turns if isinstance(turns, list) else []
+        return payload
 
-    def _save_turns(turns: list[dict[str, Any]]) -> None:
-        payload = {"turns": turns, "updated": date.today().isoformat()}
-        transcript_path.write_text(
+    def _save_conversation(conversation_id: str, turns: list[dict[str, Any]]) -> None:
+        path = _conversation_path(conversation_id)
+        existing = _load_conversation(conversation_id)
+        # The title is the first thing the user said. A conversation list of
+        # "新对话 / 新对话 / 新对话" is unusable, and asking the user to name
+        # a chat before they have had it is worse.
+        title = existing.get("title") or "新对话"
+        if title == "新对话":
+            first = next((t for t in turns if t.get("role") == "user"), None)
+            if first and str(first.get("text", "")).strip():
+                title = str(first["text"]).strip().splitlines()[0][:24]
+        payload = {
+            "id": conversation_id,
+            "title": title,
+            "updated": date.today().isoformat(),
+            "turns": turns,
+        }
+        path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
+
+    def _conversation_list() -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for conversation_id in _conversation_ids():
+            payload = _load_conversation(conversation_id)
+            rows.append(
+                {
+                    "id": conversation_id,
+                    "title": payload.get("title") or "新对话",
+                    "turns": len(payload.get("turns", [])),
+                    "updated": payload.get("updated", ""),
+                }
+            )
+        rows.sort(key=lambda row: row["id"], reverse=True)
+        return rows
+
+    def _ensure_conversation() -> str:
+        """The id to show on a bare ``GET /``: the newest, or a fresh one."""
+        ids = _conversation_ids()
+        if ids:
+            return sorted(ids, key=lambda name: int("".join(c for c in name if c.isdigit()) or 0), reverse=True)[0]
+        conversation_id = _next_id()
+        _save_conversation(conversation_id, [])
+        return conversation_id
+
+    # A pre-conversations deployment left one ``chat.json``. Importing it once
+    # keeps a user's history instead of silently starting over.
+    legacy = state / "chat.json"
+    if legacy.is_file() and not _conversation_ids():
+        try:
+            old = json.loads(legacy.read_text(encoding="utf-8"))
+            old_turns = old.get("turns", old if isinstance(old, list) else [])
+        except json.JSONDecodeError:
+            old_turns = []
+        if isinstance(old_turns, list) and old_turns:
+            _save_conversation(_next_id(), old_turns)
+        legacy.rename(state / "chat.json.imported")
 
     # -- health -----------------------------------------------------------
 
@@ -538,8 +684,9 @@ def create_app(
 
     # -- chat (default) ----------------------------------------------------
 
-    def _render_chat() -> str:
-        turns = _load_turns()
+    def _render_chat(conversation_id: str) -> str:
+        payload = _load_conversation(conversation_id)
+        turns = payload["turns"]
         names = registry.names() if registry is not None else []
         prefs = longterm.preferences()
         pills = [
@@ -547,21 +694,39 @@ def create_app(
             f'<span class="pill">决策 <b>{len(longterm.decisions())}</b></span>',
             f'<span class="pill">共 <b>{len(longterm)}</b> 条</span>',
         ]
-        pages = (
+        return (
             CHAT_PAGE.replace("__TOOL_LIST__", _tool_list_html(names))
             .replace("__MEMORY_PILLS__", "".join(pills))
+            .replace("__CONVERSATIONS__", _conversation_list_html(_conversation_list(), conversation_id))
             .replace("__MESSAGES__", _message_html(turns))
             .replace("__TOKENS__", "0")
             .replace("__TURNS__", str(len(turns)))
+            .replace("__CONV_ID__", _escape(conversation_id))
         )
-        return pages
 
     @app.get("/", response_class=HTMLResponse)
-    async def home() -> str:
+    async def home(conversation: str = Query("", alias="c")) -> str:
         if chat_agent is None:
             # No model configured -- show the plan page instead.
             return _blank_plan_page()
-        return _render_chat()
+        return _render_chat(conversation or _ensure_conversation())
+
+    @app.get("/conversations")
+    async def conversations() -> JSONResponse:
+        return JSONResponse({"conversations": _conversation_list()})
+
+    @app.post("/conversations")
+    async def new_conversation() -> JSONResponse:
+        conversation_id = _next_id()
+        _save_conversation(conversation_id, [])
+        return JSONResponse({"id": conversation_id, "conversations": _conversation_list()})
+
+    @app.delete("/conversations/{conversation_id}")
+    async def delete_conversation(conversation_id: str) -> JSONResponse:
+        path = _conversation_path(conversation_id)
+        if path.is_file():
+            path.unlink()
+        return JSONResponse({"ok": True, "conversations": _conversation_list()})
 
     @app.post("/chat")
     async def chat(request: dict[str, Any]) -> JSONResponse:
@@ -571,8 +736,10 @@ def create_app(
         message = str(request.get("message", "")).strip()
         if not message:
             raise HTTPException(status_code=400, detail="message is required")
+        conversation_id = str(request.get("conversation") or "").strip() or _ensure_conversation()
 
-        turns = _load_turns()
+        payload = _load_conversation(conversation_id)
+        turns = payload["turns"]
         history = [
             ChatMessage(role=turn["role"], content=str(turn.get("text", "")))
             for turn in turns[-HISTORY_TURNS:]
@@ -592,20 +759,23 @@ def create_app(
         tool_names = [dispatch.name for dispatch in result.dispatch if dispatch.ok]
         turns.append({"role": "user", "text": message})
         turns.append({"role": "assistant", "text": result.answer, "tools": tool_names})
-        _save_turns(turns)
+        _save_conversation(conversation_id, turns)
 
         return JSONResponse({
             "answer": result.answer,
             "tools": tool_names,
+            "conversation": conversation_id,
             "tokens": model.usage.total if hasattr(model, "usage") else 0,
             "turns": len(turns),
             "memories": len(longterm),
         })
 
     @app.post("/chat/clear")
-    async def chat_clear() -> dict[str, Any]:
-        """Clear the transcript. Long-term memory and todos are untouched."""
-        _save_turns([])
+    async def chat_clear(request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Empty one conversation. Long-term memory and todos are untouched."""
+        conversation_id = str((request or {}).get("conversation") or "").strip()
+        if conversation_id:
+            _save_conversation(conversation_id, [])
         return {"ok": True}
 
     # -- travel chain -----------------------------------------------------
