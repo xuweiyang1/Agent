@@ -325,6 +325,10 @@ def create_app(
 
     # -- travel chain -----------------------------------------------------
 
+    @app.get("/plan", response_class=HTMLResponse)
+    async def plan_form() -> str:
+        return _blank_plan_page()
+
     @app.post("/plan", response_class=HTMLResponse)
     async def plan(
         request: str = Form(DEFAULT_REQUEST),
