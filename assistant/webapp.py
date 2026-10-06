@@ -106,6 +106,10 @@ CHAT_PAGE = """<!doctype html>
                 color: var(--muted); margin: 1.4rem 0 .5rem; font-weight: 700; }
   .sidebar ul { list-style: none; padding: 0; margin: 0; }
   .sidebar li { padding: .32rem 0; font-size: 13.5px; color: #4b5563; display: flex; gap: .55rem; }
+  .sidebar li.tool { cursor: pointer; border-radius: 8px; padding: .35rem .5rem; margin: 0 -.5rem;
+                     transition: background .12s ease, color .12s ease; }
+  .sidebar li.tool:hover { background: var(--accent-soft); color: #3730a3; }
+  .sidebar li.tool:active { transform: translateY(1px); }
   .sidebar a { color: var(--accent); text-decoration: none; font-size: 13.5px; }
   .sidebar a:hover { text-decoration: underline; }
   .pill { display: inline-flex; align-items: center; gap: .4rem; background: #fff;
@@ -214,7 +218,7 @@ function bubble(role, text) {
   msg.appendChild(body);
   messagesEl.appendChild(msg);
   messagesEl.scrollTop = messagesEl.scrollHeight;
-  return body;
+  return b;
 }
 
 function chipRow(parent, tools) {
@@ -230,6 +234,11 @@ function chipRow(parent, tools) {
   parent.appendChild(row);
 }
 
+function typing(bubbleEl) {
+  bubbleEl.className = 'bubble typing';
+  bubbleEl.innerHTML = '<span></span><span></span><span></span>';
+}
+
 async function send() {
   const text = inputEl.value.trim();
   if (!text) return;
@@ -239,10 +248,7 @@ async function send() {
   bubble('user', text);
 
   const pending = bubble('assistant', '');
-  pending.querySelector('.bubble');
-  const b = pending.lastChild.firstChild;
-  b.className = 'bubble typing';
-  b.innerHTML = '<span></span><span></span><span></span>';
+  typing(pending);
 
   try {
     const resp = await fetch('/chat', {
@@ -252,15 +258,15 @@ async function send() {
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || 'request failed');
-    b.className = 'bubble';
-    b.textContent = data.answer || '(no answer)';
-    chipRow(pending, data.tools);
+    pending.className = 'bubble';
+    pending.textContent = data.answer || '(no answer)';
+    chipRow(pending.parentElement, data.tools);
     tokenEl.textContent = data.tokens;
     turnEl.textContent = data.turns;
     statusEl.textContent = '就绪';
   } catch (e) {
-    b.className = 'bubble';
-    b.textContent = '出错了：' + e.message;
+    pending.className = 'bubble';
+    pending.textContent = '出错了：' + e.message;
     statusEl.textContent = '出错';
   } finally {
     sendBtn.disabled = false;
@@ -274,6 +280,16 @@ clearBtn.addEventListener('click', async () => {
   if (!confirm('清空这次对话？（长期记忆和待办不受影响）')) return;
   await fetch('/chat/clear', {method: 'POST'});
   location.reload();
+});
+
+// Tools are a starter menu, not decoration: clicking one drops a real example
+// into the composer so the user can see what the tool is for and edit it.
+document.querySelectorAll('.tool').forEach(el => {
+  el.addEventListener('click', () => {
+    inputEl.value = el.dataset.prompt || el.dataset.name;
+    inputEl.focus();
+    statusEl.textContent = '已填入示例，可直接发送或修改';
+  });
 });
 </script>
 </body></html>
@@ -297,11 +313,34 @@ TOOL_ICONS: dict[str, str] = {
 }
 
 
+# One concrete example per tool. The sidebar is a starter menu, not decoration:
+# clicking a tool fills the composer with a real sentence, which both teaches
+# what the tool does and gives the user something to edit instead of a blank box.
+TOOL_EXAMPLES: dict[str, str] = {
+    "weather": "上海今天天气怎么样",
+    "convert_currency": "把 100 美元换成人民币",
+    "todo": "帮我记一条待办：周五交周报",
+    "calendar": "下周三下午 3 点安排一次会议",
+    "search": "查一下 wifi 密码",
+    "render_chart": "把北京、上海、广州的销量画成柱状图",
+    "list_files": "列出我工作目录里的文件",
+    "read_file": "读一下 notes.md 的内容",
+    "write_file": "把这段总结写进 summary.md",
+    "search_files": "在工作目录里搜一下「发票」",
+    "memory": "记住我偏好靠窗的座位",
+    "note": "帮我记个笔记：周五要带护照",
+}
+
+
 def _tool_list_html(names: list[str]) -> str:
     items = []
     for name in names:
         icon = TOOL_ICONS.get(name, "•")
-        items.append(f'<li><span>{icon}</span><span>{name}</span></li>')
+        example = TOOL_EXAMPLES.get(name, name)
+        items.append(
+            f'<li class="tool" data-name="{_escape(name)}" data-prompt="{_escape(example)}"'
+            f' title="{_escape(example)}"><span>{icon}</span><span>{name}</span></li>'
+        )
     return "".join(items) or "<li>（无）</li>"
 
 

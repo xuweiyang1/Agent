@@ -304,6 +304,11 @@ un_chain 新增 perceived_override（外部已读到的字段可跳过 perceptio
   文件。另新增 `agentkit/tools/notes.py`（记笔记）与重做的聊天页（侧栏工具列表、记忆/令牌
   读数、工具调用 chip、清空对话）。10 项新测试（`tests/test_local_deploy.py` 扩到 25 项），
   全量 446 项离线通过。
+  随后按使用反馈修掉两个前端缺陷（同一阶段一）：气泡为空时取 ``firstChild`` 得到
+  ``null``，赋值即抛错、``fetch`` 根本没发出（症状是永远"思考中…"、tokens 0）——
+  改为直接复用 ``bubble()`` 返回的气泡节点；侧栏工具列表从"静态装饰"改成可点击的
+  起始菜单（点一下把该工具的示例问句填进输入框，可改再发），并补 3 项前端回归测试
+  （占位符残留 / 发送路径可用 / 工具可点）。全量 449 项离线通过。
 - Dockerfile 已就位并**实测构建运行通过**（根目录 `Dockerfile` + `.dockerignore`）：
   `python:3.10-slim` + `requirements.txt` + `python -m mcp_server.cloud --host 0.0.0.0`。
   `healthz` 返回 `{"ok": true, "rooted": "data"}`。第一次构建能过、容器却

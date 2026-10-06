@@ -287,6 +287,38 @@ class ChatPersistenceTests(unittest.TestCase):
         self.assertEqual(app.state.longterm.preference("hotel"), "quiet")
 
 
+class ChatFrontendTests(unittest.TestCase):
+    """Guards for the page's own bugs.
+
+    The first version shipped a composer that never sent anything: ``bubble()``
+    returned the wrong element, ``firstChild`` was ``null``, and the TypeError
+    fired before ``fetch``. Nothing server-side could catch it, so the symptom
+    was a spinner forever. These assert the two things that broke -- the
+    composer sends, and the tool list is a usable menu rather than decoration.
+    """
+
+    def _page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            return TestClient(create_app(state_dir=tmp, model=_EchoModel())).get("/").text
+
+    def test_no_leftover_template_placeholders(self):
+        page = self._page()
+        for placeholder in ("__TOOL_LIST__", "__MEMORY_PILLS__", "__MESSAGES__", "__TOKENS__", "__TURNS__"):
+            self.assertNotIn(placeholder, page)
+
+    def test_the_page_has_a_usable_send_path(self):
+        page = self._page()
+        # The bug was assigning to this null node, which aborted before fetch.
+        self.assertNotIn("lastChild.firstChild", page)
+        self.assertIn("fetch('/chat'", page)
+
+    def test_tools_are_clickable_and_carry_an_example(self):
+        page = self._page()
+        self.assertIn('class="tool"', page)
+        self.assertIn("data-prompt=", page)
+        self.assertIn("dataset.prompt", page.split("<script>")[-1])
+
+
 class MemoryToolTests(unittest.TestCase):
     """W5's store, reachable from the tool layer so the chat can write to it."""
 
