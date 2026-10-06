@@ -1,4 +1,0 @@
-Remove the accidental commit-message scratch file
-
-The message was written to a temp file (PowerShell has no heredoc), and
-``git add -A`` swept it into the commit. It was never meant to ship.
