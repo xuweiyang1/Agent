@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -t .
 ```
 
-That command should print `OK` with 436 tests. If it does, everything below is
+That command should print `OK` with 446 tests. If it does, everything below is
 reproducible on your machine; if it does not, the failure is a real signal
 about the environment rather than a flaky test.
 
@@ -46,7 +46,7 @@ python scripts\rag_compare.py       # W6: naive vs agentic retrieval, side by si
 python scripts\rag_vector_compare.py # the store swap: BM25 vs dense vs hybrid
 python scripts\rag_agents.py        # W7: single vs multi-agent, and the break-even
 python scripts\demo_chain.py        # the whole chain: image -> todos -> calendar
-python scripts\serve_local.py       # the local deployment: a browser in front of the chain
+python scripts\serve_local.py       # the local deployment: a chat UI with memory, plus the chain
 python scripts\check_docs.py         # docs drift check: docs vs code
 ```
 

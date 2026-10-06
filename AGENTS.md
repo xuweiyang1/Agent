@@ -45,7 +45,7 @@ Test-Path mcp_server            # True = 做了
 ## 怎么验证这一步真的做完了
 
 ```powershell
-python -m unittest discover -s tests -t .      # 应该 436 项全过
+python -m unittest discover -s tests -t .      # 应该 446 项全过
 python scripts\rag_baseline.py                 # W3.5 基线数字，应该能复现
 python scripts\check_docs.py                   # 文档与代码是否漂移
 python scripts\demo_w4.py                      # W4 规划 Agent，看分支与 checkpoint

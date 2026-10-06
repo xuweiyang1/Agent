@@ -291,6 +291,19 @@ un_chain 新增 perceived_override（外部已读到的字段可跳过 perceptio
   是可选真视觉读图器（模型回 JSON，解析容错），没配 key 时表单照常可用。15 项新测试
   （`tests/test_local_deploy.py`），全量 436 项离线通过。入口 `python scripts/serve_local.py`。
   阶段二（上线版：多用户、鉴权、DB）在此之上加，链与工具不动。
+- **本机部署版加固：聊天界面 + 长期记忆（同一阶段一，补齐可日常使用）**：
+  表单版只是"包住整条链"，不是能天天用的助手；三个真实缺陷逐个修掉。
+  (1) 会话只活在浏览器 JS 变量里，刷新即失忆 —— 现在每轮写入 `state_dir/chat.json`，
+  页面加载时回放历史，重启/换标签页都还在。
+  (2) W5 的长期记忆**没有任何写入口**，"会记住"是空话 —— 新增
+  `agentkit/tools/memory.py`（一个 `memory` 工具：preference / decision / fact 三种写入 +
+  list / recall），每轮把它 `context_for()` 出的偏好与回忆注入 system prompt。记住的是
+  **约束**而非日记：下一轮的回答里偏好已经生效。
+  (3) 聊天里建的待办**没落盘**（registry 走了默认的内存服务），`/state` 永远看不到 ——
+  现在 registry 显式注入指向 `state_dir` 的 Todo / Calendar / NoteService，与链共用同一份
+  文件。另新增 `agentkit/tools/notes.py`（记笔记）与重做的聊天页（侧栏工具列表、记忆/令牌
+  读数、工具调用 chip、清空对话）。10 项新测试（`tests/test_local_deploy.py` 扩到 25 项），
+  全量 446 项离线通过。
 - Dockerfile 已就位并**实测构建运行通过**（根目录 `Dockerfile` + `.dockerignore`）：
   `python:3.10-slim` + `requirements.txt` + `python -m mcp_server.cloud --host 0.0.0.0`。
   `healthz` 返回 `{"ok": true, "rooted": "data"}`。第一次构建能过、容器却
